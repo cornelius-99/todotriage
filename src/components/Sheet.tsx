@@ -12,12 +12,14 @@ export function Sheet({
   onClose,
   children,
   footer,
+  class: cls,
 }: {
   title: string;
   subtitle?: ComponentChildren;
   onClose: () => void;
   children: ComponentChildren;
   footer?: ComponentChildren;
+  class?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -33,7 +35,7 @@ export function Sheet({
 
   return (
     <div class="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div class="sheet" role="dialog" aria-modal="true" aria-label={title}>
+      <div class={cls ? `sheet ${cls}` : 'sheet'} role="dialog" aria-modal="true" aria-label={title}>
         <div class="sheet-grip" aria-hidden="true" />
         <header class="sheet-head">
           <div>

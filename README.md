@@ -77,7 +77,7 @@ Within a queue, overdue tasks are sorted oldest first, today's timed tasks by ti
 | `⇧R`             | Refresh                        |
 | `?`              | Show all shortcuts             |
 
-In the pickers, `↑`/`↓` and `↵` choose, `Esc` closes, and typing filters. The date picker sends whatever you type to Todoist's own parser, so `fri 3pm`, `in 2 weeks` and `every other monday` all work.
+In the pickers, `↑`/`↓` and `↵` choose, `Esc` closes, and typing filters. The date picker sends whatever you type to Todoist's own parser, so `fri 3pm`, `in 2 weeks` and `every other monday` all work. It also has a month calendar: click a day, or tab into it and use the arrow keys (`PgUp`/`PgDn` change month). On a phone, swipe it sideways.
 
 ## Gestures (phone)
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Due } from '../api/types.ts';
-import { addDays, datePresets, dayLabel, dueDay, dueStatus, dueTime, moveDueDate, nextWeekday, overdueBy, todayIn, weekday } from './dates.ts';
+import { addDays, addMonths, datePresets, dayLabel, dueDay, dueStatus, dueTime, monthGrid, monthTitle, moveDueDate, nextWeekday, overdueBy, todayIn, weekday } from './dates.ts';
 
 const due = (date: string, extra: Partial<Due> = {}): Due => ({ date, string: date, isRecurring: false, ...extra });
 
@@ -20,6 +20,25 @@ describe('day math', () => {
     expect(nextWeekday('2026-10-16', 6)).toBe('2026-10-17'); // Fri → Sat
     expect(nextWeekday('2026-10-16', 1)).toBe('2026-10-19'); // Fri → Mon
     expect(nextWeekday('2026-10-19', 1)).toBe('2026-10-26'); // Mon → next Mon
+  });
+
+  it('adds months, clamping to shorter months', () => {
+    expect(addMonths('2026-10-16', 1)).toBe('2026-11-16');
+    expect(addMonths('2026-12-05', 1)).toBe('2027-01-05');
+    expect(addMonths('2027-01-31', 1)).toBe('2027-02-28');
+    expect(addMonths('2028-03-31', -1)).toBe('2028-02-29');
+    expect(addMonths('2026-10-16', -12)).toBe('2025-10-16');
+  });
+
+  it('lays out six weeks for a month from the chosen week start', () => {
+    const mon = monthGrid('2026-10', 1); // Oct 1 2026 is a Thursday
+    expect(mon).toHaveLength(42);
+    expect(mon[0]).toBe('2026-09-28');
+    expect(mon[3]).toBe('2026-10-01');
+    expect(mon[41]).toBe('2026-11-08');
+    expect(monthGrid('2026-10', 7)[0]).toBe('2026-09-27');
+    expect(monthGrid('2026-06', 1)[0]).toBe('2026-06-01'); // starts on a Monday: no leading days
+    expect(monthTitle('2026-10')).toBe('October 2026');
   });
 
   it('computes today in a timezone', () => {

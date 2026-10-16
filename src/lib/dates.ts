@@ -44,6 +44,13 @@ export function addDays(day: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** `day` moved by `n` calendar months, clamped to the end of shorter months (31 Jan + 1 → 28 Feb). */
+export function addMonths(day: string, n: number): string {
+  const [y, m, d] = day.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m + n, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + n, Math.min(d, last))).toISOString().slice(0, 10);
+}
+
 export function diffDays(a: string, b: string): number {
   return Math.round((toUTC(a).getTime() - toUTC(b).getTime()) / 86_400_000);
 }
@@ -117,8 +124,22 @@ export function dueStatus(due: Due | null, today: string, tz: string): DueStatus
   return 'future';
 }
 
-const WEEKDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "October 2026" for a `YYYY-MM` month. */
+export function monthTitle(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return `${MONTH_LONG[m - 1]} ${y}`;
+}
+
+/** The six weeks shown for a `YYYY-MM` month, starting on ISO weekday `weekStart`. */
+export function monthGrid(month: string, weekStart = 1): string[] {
+  const first = `${month}-01`;
+  const start = addDays(first, -((weekday(first) - weekStart + 7) % 7));
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
 
 /** "Fri 16 Oct", or "Fri 16 Oct 2027" outside the current year. */
 export function shortDate(day: string, today: string): string {
