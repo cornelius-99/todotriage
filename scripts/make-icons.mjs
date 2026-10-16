@@ -1,4 +1,5 @@
-// Renders the app icon (gradient tile + check mark) to PNGs without any image dependencies.
+// Draws the app icon (a stack of task cards, the top one checked off and swiped away) once, then writes it as an SVG and
+// renders it to PNGs without any image dependencies.
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 
@@ -35,6 +36,53 @@ function png(size, rgba) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
+// The artwork, on a 64×64 tile. Shapes in the SWIPED frame are drawn relative to the front card's centre, tilted with it.
+const GRADIENT = ['#ef6a4c', '#d63f4f'];
+const TILE_RADIUS = 14;
+const SWIPED = { x: 34.5, y: 40, deg: 10 };
+const SHAPES = [
+  // The rest of the queue, peeking out behind.
+  { rect: [19.5, 11, 25, 20], radius: 4, fill: '#ec918a' },
+  { rect: [15.5, 15.5, 33, 24], radius: 5, fill: '#f6c4be' },
+  // The card being swiped right: shadow, card, check.
+  { frame: SWIPED, rect: [-18.6, -11.9, 38, 27], radius: 5.5, fill: '#7a1f1f', opacity: 0.3, blur: 1.5 },
+  { frame: SWIPED, rect: [-19, -13.5, 38, 27], radius: 5.5, fill: '#ffffff' },
+  { frame: SWIPED, path: [[-8, 0.5], [-2.5, 6], [9, -5.5]], width: 4.6, stroke: '#dc4c3e' },
+];
+
+function svg() {
+  const defs = [
+    `<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${GRADIENT[0]}"/><stop offset="1" stop-color="${GRADIENT[1]}"/></linearGradient>`,
+  ];
+  const body = [`<rect width="64" height="64" rx="${TILE_RADIUS}" fill="url(#g)"/>`];
+  SHAPES.forEach((s, i) => {
+    let el = s.rect
+      ? `<rect x="${s.rect[0]}" y="${s.rect[1]}" width="${s.rect[2]}" height="${s.rect[3]}" rx="${s.radius}" fill="${s.fill}"`
+      : `<path d="M${s.path.join(' ')}" fill="none" stroke="${s.stroke}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"`;
+    if (s.opacity) el += ` opacity="${s.opacity}"`;
+    if (s.blur) {
+      defs.push(`<filter id="b${i}" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="${s.blur}"/></filter>`);
+      el += ` filter="url(#b${i})"`;
+    }
+    if (s.frame) el += ` transform="translate(${s.frame.x} ${s.frame.y}) rotate(${s.frame.deg})"`;
+    body.push(`${el}/>`);
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\n  <defs>\n    ${defs.join('\n    ')}\n  </defs>\n  ${body.join('\n  ')}\n</svg>\n`;
+}
+
+const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+const clamp01 = (x) => Math.min(Math.max(x, 0), 1);
+const smoothstep = (a, b, x) => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+
+function roundedRectDist(px, py, [x, y, w, h], r) {
+  const qx = Math.abs(px - x - w / 2) - w / 2 + r;
+  const qy = Math.abs(py - y - h / 2) - h / 2 + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+}
+
 function distToSegment(px, py, ax, ay, bx, by) {
   const dx = bx - ax;
   const dy = by - ay;
@@ -42,50 +90,54 @@ function distToSegment(px, py, ax, ay, bx, by) {
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-// Coordinates in a 0..1 unit square.
-const CHECK = [
-  [0.29, 0.52],
-  [0.43, 0.66],
-  [0.72, 0.36],
-];
-const STROKE = 0.085;
-const A = [0xef, 0x6a, 0x4c];
-const B = [0xd6, 0x3f, 0x4f];
+/** Signed distance from a point on the tile to the edge of a shape: negative inside. */
+function distance(s, x, y) {
+  if (s.frame) {
+    const a = (-s.frame.deg * Math.PI) / 180;
+    const dx = x - s.frame.x;
+    const dy = y - s.frame.y;
+    x = dx * Math.cos(a) - dy * Math.sin(a);
+    y = dx * Math.sin(a) + dy * Math.cos(a);
+  }
+  if (s.rect) return roundedRectDist(x, y, s.rect, s.radius);
+  let d = Infinity;
+  for (let i = 1; i < s.path.length; i++) d = Math.min(d, distToSegment(x, y, ...s.path[i - 1], ...s.path[i]));
+  return d - s.width / 2;
+}
 
-function render(size, { rounded }) {
+// `scale` shrinks the artwork (not the tile) around the centre, to keep it inside a maskable icon's safe zone.
+function render(size, { rounded, scale = 1 }) {
   const out = Buffer.alloc(size * size * 4);
-  const SS = 4;
-  const r = rounded ? 0.225 : 0;
+  const unit = size / 64;
+  const [A, B] = GRADIENT.map(hex);
+  const layers = SHAPES.map((s) => ({ ...s, rgb: hex(s.fill ?? s.stroke) }));
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      let cover = 0;
-      let white = 0;
-      for (let sy = 0; sy < SS; sy++) {
-        for (let sx = 0; sx < SS; sx++) {
-          const u = (x + (sx + 0.5) / SS) / size;
-          const v = (y + (sy + 0.5) / SS) / size;
-          const cx = Math.min(Math.max(u, r), 1 - r);
-          const cy = Math.min(Math.max(v, r), 1 - r);
-          if (r && Math.hypot(u - cx, v - cy) > r) continue;
-          cover++;
-          const d = Math.min(distToSegment(u, v, ...CHECK[0], ...CHECK[1]), distToSegment(u, v, ...CHECK[1], ...CHECK[2]));
-          if (d < STROKE / 2) white++;
-        }
+      const u = (x + 0.5) / unit;
+      const v = (y + 0.5) / unit;
+      const t = (u + v) / 128;
+      let rgb = A.map((a, c) => a + (B[c] - a) * t);
+      const su = 32 + (u - 32) / scale;
+      const sv = 32 + (v - 32) / scale;
+      for (const s of layers) {
+        const d = distance(s, su, sv);
+        // A Gaussian blur's edge is close to a smoothstep over ±2σ; sharp edges are antialiased over one pixel.
+        const k = s.blur ? 1 - smoothstep(-2 * s.blur, 2 * s.blur, d) : clamp01(0.5 - d * unit * scale);
+        rgb = rgb.map((c, i) => c + (s.rgb[i] - c) * k * (s.opacity ?? 1));
       }
-      const n = SS * SS;
-      const t = (x / size + y / size) / 2;
-      const w = cover ? white / cover : 0;
       const i = (y * size + x) * 4;
-      for (let c = 0; c < 3; c++) out[i + c] = Math.round((A[c] + (B[c] - A[c]) * t) * (1 - w) + 255 * w);
-      out[i + 3] = Math.round((cover / n) * 255);
+      for (let c = 0; c < 3; c++) out[i + c] = Math.round(rgb[c]);
+      out[i + 3] = rounded ? Math.round(clamp01(0.5 - roundedRectDist(u, v, [0, 0, 64, 64], TILE_RADIUS) * unit) * 255) : 255;
     }
   }
   return png(size, out);
 }
 
+writeFileSync('public/icon.svg', svg());
 // iOS applies its own corner mask, so the touch icon is a full square.
 writeFileSync('public/apple-touch-icon.png', render(180, { rounded: false }));
 writeFileSync('public/icon-192.png', render(192, { rounded: true }));
+writeFileSync('public/icon-300.png', render(300, { rounded: true }));
 writeFileSync('public/icon-512.png', render(512, { rounded: true }));
-writeFileSync('public/icon-maskable-512.png', render(512, { rounded: false }));
+writeFileSync('public/icon-maskable-512.png', render(512, { rounded: false, scale: 0.85 }));
 console.log('icons written');

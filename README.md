@@ -111,7 +111,7 @@ Each person signs in with their own Todoist account, and nothing is stored serve
 ```bash
 npm test        # unit tests: date math, queue logic, PKCE and token refresh (vitest)
 npm run build   # typecheck + production build
-npm run icons   # regenerate the PNG app icons
+npm run icons   # redraw the app icon: icon.svg plus every PNG size
 ```
 
 Code map:
