@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Project } from '../api/types.ts';
 import { todoistColor, uiPriority } from '../lib/colors.ts';
-import { datePresets, dayLabel, describeDue, shortDate } from '../lib/dates.ts';
+import { datePresets, dayLabel, describeDue, dueDay, shortDate } from '../lib/dates.ts';
 import { fuzzyFilter } from '../lib/fuzzy.ts';
 import { QUEUE_CHORDS, SHORTCUTS } from '../shortcuts.ts';
 import {
@@ -26,6 +26,7 @@ import {
   undo,
   user,
 } from '../store.ts';
+import { Calendar } from './Calendar.tsx';
 import { Icon, type IconName } from './icons.tsx';
 import { hasFinePointer, PickList, Sheet, type PickItem } from './Sheet.tsx';
 
@@ -43,7 +44,6 @@ const PRESET_ICON: Record<string, IconName> = {
 function ScheduleSheet() {
   const task = current.value;
   const [query, setQuery] = useState('');
-  const dateInput = useRef<HTMLInputElement>(null);
   if (!task) return null;
   const u = user.value;
   const presets = datePresets(today.value, { weekendStart: u?.weekendStartDay, nextWeek: u?.nextWeek });
@@ -67,6 +67,7 @@ function ScheduleSheet() {
   return (
     <Sheet
       title="Schedule"
+      class="sheet-schedule"
       subtitle={
         task.due ? (
           <>
@@ -84,22 +85,7 @@ function ScheduleSheet() {
         onQuery={setQuery}
         placeholder="Type a date: fri 3pm, in 2 weeks, every monday…"
         items={items}
-        extra={
-          <label class="date-row">
-            <Icon name="calendar" size={17} />
-            <span>Pick on calendar…</span>
-            <input
-              ref={dateInput}
-              type="date"
-              min={today.value}
-              onClick={() => dateInput.current?.showPicker?.()}
-              onChange={(e) => {
-                const v = (e.target as HTMLInputElement).value;
-                if (v) pick(v, dayLabel(v, today.value));
-              }}
-            />
-          </label>
-        }
+        extra={<Calendar today={today.value} marked={task.due && dueDay(task.due, tz.value)} weekStart={u?.startDay} onPick={(d) => pick(d, dayLabel(d, today.value))} />}
       />
     </Sheet>
   );
