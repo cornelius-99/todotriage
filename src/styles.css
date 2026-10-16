@@ -513,6 +513,16 @@ kbd {
   align-items: center;
   padding: 28px 24px 32px;
   gap: 22px;
+  /* Lets the stage size itself against the visible height (cqh). */
+  container-type: size;
+  /* How far the next card sticks out above the current one, and the card after it above that. */
+  --peek: 86px;
+  --stack: calc(var(--peek) + 14px);
+  /* How much of the next card is drawn (in its own, unscaled pixels); the rest is hidden behind the current card. */
+  --peek-clip: 130px;
+  --card-min: 230px;
+  /* Room under the deck: the action panel and the gap above it. */
+  --below: 150px;
 }
 
 /* ------------------------------------------------------------------ queue list */
@@ -611,30 +621,72 @@ kbd {
 .stage {
   width: 100%;
   max-width: 720px;
+  /* Centre a typical card (and the stack above it) on screen. The offset doesn't depend on the card's own height, so a
+     taller card grows downward instead of shifting the deck while one card hands over to the next. */
+  margin-top: max(0px, (100cqh - var(--stack) - var(--card-min) - var(--below)) / 2);
 }
 
 .deck {
   position: relative;
+  padding-top: var(--stack);
 }
 
+/* The card after next: just an edge above the next one. */
 .peek {
   position: absolute;
-  inset: 0;
-  transform-origin: 50% 100%;
+  top: var(--stack);
+  left: 0;
+  right: 0;
+  height: var(--peek-clip);
+  transform-origin: 50% 0;
+  transform: translateY(calc(-1 * var(--stack))) scale(0.84);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 55%, var(--bg));
   border: 1px solid var(--border);
+  pointer-events: none;
+  animation: fade-in 0.3s ease backwards;
+}
+
+/* Clips a card down to the part that shows above the current one. Wide sides keep its shadow. */
+.card.peek-next,
+.card.from-stack {
+  --clip-peek: inset(-40px -40px calc(100% - var(--peek-clip)) -40px);
+}
+
+/* Veils the next card so the current one stays in focus. */
+.card.peek-next::after,
+.card.from-stack::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: var(--bg);
+  opacity: 0.45;
   pointer-events: none;
 }
 
-.peek-1 {
-  transform: translateY(8px) scale(0.96);
-  opacity: 0.7;
+.card.peek-next {
+  position: absolute;
+  top: var(--stack);
+  left: 0;
+  right: 0;
+  transform-origin: 50% 0;
+  transform: translateY(calc(-1 * var(--peek))) scale(0.92);
+  clip-path: var(--clip-peek);
+  pointer-events: none;
+  animation: peek-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
-.peek-2 {
-  transform: translateY(16px) scale(0.92);
-  opacity: 0.4;
+/* After an action, wait for the stamp before moving up a place. */
+.card.peek-next.late {
+  animation-delay: 0.28s;
+}
+
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--stack))) scale(0.84);
+  }
 }
 
 .card-wrap {
@@ -649,7 +701,7 @@ kbd {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 20px 22px 18px;
-  min-height: 230px;
+  min-height: var(--card-min, 230px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -670,11 +722,6 @@ kbd {
   cursor: grabbing;
 }
 
-.card.flying {
-  transition: transform 0.18s ease-in, opacity 0.18s ease-in;
-  opacity: 0;
-}
-
 @keyframes card-in {
   from {
     opacity: 0;
@@ -682,30 +729,62 @@ kbd {
   }
 }
 
+/* The next card sliding down out of the stack into place once the stamp is done. It starts exactly where .peek-next
+   sits; the extra -4% makes up for scaling around the centre rather than the top edge. */
+.card.from-stack {
+  animation: card-from-stack 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.28s backwards;
+}
+
+.card.from-stack::after {
+  opacity: 0;
+  animation: unveil 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.28s backwards;
+}
+
+@keyframes card-from-stack {
+  from {
+    transform: translateY(calc(-1 * var(--peek) - 4%)) scale(0.92);
+    clip-path: var(--clip-peek);
+  }
+  to {
+    clip-path: inset(-40px);
+  }
+}
+
+@keyframes unveil {
+  from {
+    opacity: 0.45;
+  }
+}
+
 .ghost {
   position: absolute;
-  inset: 0 0 auto 0;
+  top: var(--stack);
+  left: 0;
+  right: 0;
   z-index: 2;
   pointer-events: none;
-  animation-duration: 0.3s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.8, 0.4);
-  animation-fill-mode: forwards;
+  animation: var(--out) 0.3s cubic-bezier(0.4, 0, 0.8, 0.4) forwards;
+}
+
+/* Stamped first, then off it goes. */
+.ghost.stamped {
+  animation: var(--out) 0.26s cubic-bezier(0.4, 0, 0.8, 0.4) 0.3s forwards;
 }
 
 .ghost-right {
-  animation-name: out-right;
+  --out: out-right;
 }
 .ghost-left {
-  animation-name: out-left;
+  --out: out-left;
 }
 .ghost-up {
-  animation-name: out-up;
+  --out: out-up;
 }
 .ghost-down {
-  animation-name: out-down;
+  --out: out-down;
 }
 .ghost-fade {
-  animation-name: out-fade;
+  --out: out-fade;
 }
 
 @keyframes out-right {
@@ -736,6 +815,77 @@ kbd {
   to {
     transform: scale(0.9);
     opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ stamp */
+
+.stamp-layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 20px;
+  translate: var(--stamp-at, 0 0);
+  pointer-events: none;
+}
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
+  padding: 12px 24px;
+  border: 3px solid currentColor;
+  border-radius: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
+  opacity: 0.85;
+  transform: rotate(-8deg);
+  /* Ink grain: noise knocks speckles out of the border and letters, so it reads as a rubber stamp rather than a box. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -5 0 0 0 3.7'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  -webkit-mask: var(--grain) 0 0 / 180px 180px;
+  mask: var(--grain) 0 0 / 180px 180px;
+  animation: stamp-in 0.16s ease-out both;
+}
+
+.stamp .icon {
+  flex: none;
+  stroke-width: 2;
+}
+
+.stamp-done {
+  color: color-mix(in srgb, var(--done) 72%, var(--muted));
+}
+.stamp-deleted {
+  color: color-mix(in srgb, var(--danger) 72%, var(--muted));
+}
+.stamp-scheduled {
+  color: color-mix(in srgb, var(--schedule) 72%, var(--muted));
+}
+.stamp-moved {
+  color: color-mix(in srgb, var(--move) 72%, var(--muted));
+}
+
+.stamp-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.4em;
+  /* Tracking adds space after the last letter too; take it back so the text sits centred. */
+  margin-right: -0.4em;
+}
+
+/* Pops on in place. */
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(1.25);
   }
 }
 
@@ -1891,6 +2041,9 @@ kbd {
   .main {
     padding: 16px 12px 24px;
     justify-content: flex-start;
+    --card-min: min(40dvh, 330px);
+    /* Just the gesture hint. */
+    --below: 44px;
   }
 
   .panel {
@@ -1903,7 +2056,12 @@ kbd {
 
   .card {
     padding: 18px 18px 16px;
-    min-height: min(40dvh, 330px);
+  }
+
+  .stamp {
+    gap: 10px;
+    padding: 10px 18px;
+    font-size: 18px;
   }
 
   .card-title {

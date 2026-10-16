@@ -20,6 +20,8 @@ import {
   tasks,
   today,
   tz,
+  type Exit,
+  type Stamp,
 } from '../store.ts';
 import { Icon, type IconName } from './icons.tsx';
 import { RichText } from './RichText.tsx';
@@ -113,17 +115,20 @@ function Subtasks({ task }: { task: Task }) {
   );
 }
 
-function CardBody({ task, expanded, onExpand }: { task: Task; expanded?: boolean; onExpand?: () => void }) {
+function CardBody({ task, expanded, onExpand, shown }: { task: Task; expanded?: boolean; onExpand?: () => void; shown?: Exit }) {
   const p = uiPriority(task.priority);
-  const reasons = reasonsFor(task, queue.value, {
-    today: today.value,
-    tz: tz.value,
-    inboxId: inboxId.value,
-    tasks: tasks.value,
-    gone: gone.value,
-    dateAck: dateAck.value,
-  });
-  const pos = list.value.indexOf(task.id);
+  const reasons =
+    shown?.reasons ??
+    reasonsFor(task, queue.value, {
+      today: today.value,
+      tz: tz.value,
+      inboxId: inboxId.value,
+      tasks: tasks.value,
+      gone: gone.value,
+      dateAck: dateAck.value,
+    });
+  const pos = shown ? shown.pos : list.value.indexOf(task.id);
+  const total = shown ? shown.total : list.value.length;
   const long = task.description.length > 220 || task.description.split('\n').length > 5;
   return (
     <>
@@ -138,7 +143,7 @@ function CardBody({ task, expanded, onExpand }: { task: Task; expanded?: boolean
         </span>
         {pos >= 0 && (
           <span class="pos">
-            {pos + 1} / {list.value.length}
+            {pos + 1} / {total}
           </span>
         )}
       </div>
@@ -185,12 +190,12 @@ export function TaskCard({ task }: { task: Task }) {
     live.current = d;
     setDragState(d);
   };
-  const [flying, setFlying] = useState<SwipeAction | null>(null);
   const [expanded, setExpanded] = useState(false);
+  // Taking over from a card that's being stamped: slide down out of the stack once the stamp is done.
+  const [fromStack] = useState(() => !!exiting.value?.stamp);
 
   useEffect(() => {
     setDrag({ dx: 0, dy: 0, axis: null });
-    setFlying(null);
     setExpanded(false);
   }, [task.id]);
 
@@ -239,29 +244,24 @@ export function TaskCard({ task }: { task: Task }) {
   };
 
   const run = (action: SwipeAction) => {
+    const { dx, dy } = live.current;
+    setDrag({ dx: 0, dy: 0, axis: null });
     if (action === 'schedule' || action === 'move') {
-      setDrag({ dx: 0, dy: 0, axis: null });
       sheet.value = action;
       return;
     }
-    setFlying(action);
-    setTimeout(() => {
-      if (action === 'done') complete(task.id);
-      else if (action === 'delete') remove(task.id);
-      else skip();
-      // The card already flew out; no need for the exit ghost.
-      exiting.value = null;
-    }, 170);
+    if (action === 'done') complete(task.id);
+    else if (action === 'delete') remove(task.id);
+    else skip();
+    // The exit ghost takes over from where the finger let go: stamped there, then flung on in the same direction.
+    const ex = exiting.value;
+    if (ex?.task.id === task.id) exiting.value = { ...ex, dir: action === 'skip' ? 'up' : 'right', from: { x: dx, y: dy } };
   };
 
-  const preview = flying ?? actionFor(drag.dx, drag.dy, width(), drag.axis);
+  const preview = actionFor(drag.dx, drag.dy, width(), drag.axis);
   const side = drag.dx > 0 ? 'left' : 'right';
   const progress = Math.min(1, Math.abs(drag.axis === 'y' ? drag.dy / 70 : drag.dx / (width() * SHORT)));
-  const transform = flying
-    ? flying === 'skip'
-      ? 'translateY(-120%) scale(.9)'
-      : `translateX(${flying === 'done' || flying === 'delete' ? 130 : -130}%) rotate(${flying === 'done' || flying === 'delete' ? 8 : -8}deg)`
-    : `translate(${drag.dx}px, ${drag.dy}px) rotate(${drag.dx / 40}deg)`;
+  const transform = `translate(${drag.dx}px, ${drag.dy}px) rotate(${drag.dx / 40}deg)`;
 
   return (
     <div class="card-wrap">
@@ -281,7 +281,7 @@ export function TaskCard({ task }: { task: Task }) {
       )}
       <div
         ref={ref}
-        class={`card ${drag.axis ? 'dragging' : ''} ${flying ? 'flying' : ''} ${expanded ? 'expanded' : ''}`}
+        class={`card ${drag.axis ? 'dragging' : ''} ${fromStack ? 'from-stack' : ''} ${expanded ? 'expanded' : ''}`}
         style={{ transform }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -294,20 +294,67 @@ export function TaskCard({ task }: { task: Task }) {
   );
 }
 
-/** A copy of a card that just left the queue, animating out in the direction of the action. */
+/** The card after the current one, peeking out from behind it. */
+export function PeekCard({ task }: { task: Task }) {
+  // Right after an action it waits for the stamp, like the card that slides out of this spot.
+  const [late] = useState(() => !!exiting.value?.stamp);
+  return (
+    <div class={`card peek-next ${late ? 'late' : ''}`} aria-hidden="true" inert>
+      <CardBody task={task} />
+    </div>
+  );
+}
+
+const STAMP_ICON: Record<Stamp['kind'], IconName> = {
+  done: 'check',
+  deleted: 'trash',
+  scheduled: 'arrowRight',
+  unscheduled: 'calendarX',
+  moved: 'move',
+  skipped: 'skip',
+};
+
+function StampMark({ stamp }: { stamp: Stamp }) {
+  const icon = <Icon name={STAMP_ICON[stamp.kind]} size={20} />;
+  return (
+    <div class="stamp-layer">
+      {/* "DONE ✓", but "→ TOMORROW" */}
+      <div class={`stamp stamp-${stamp.kind}`}>
+        {stamp.kind !== 'done' && icon}
+        <span class="stamp-text">{stamp.text}</span>
+        {stamp.kind === 'done' && icon}
+      </div>
+    </div>
+  );
+}
+
+// Keep in sync with the .ghost animations in styles.css.
+const GHOST_MS = 320;
+const STAMPED_GHOST_MS = 600;
+
+/** A copy of a card that just left the queue: stamped with what happened, then animating out in the direction of the action. */
 export function ExitGhost() {
   const ex = exiting.value;
   useEffect(() => {
     if (!ex) return;
-    const t = setTimeout(() => {
-      if (exiting.value?.key === ex.key) exiting.value = null;
-    }, 320);
+    const t = setTimeout(
+      () => {
+        if (exiting.value?.key === ex.key) exiting.value = null;
+      },
+      ex.stamp ? STAMPED_GHOST_MS : GHOST_MS,
+    );
     return () => clearTimeout(t);
   }, [ex?.key]);
   if (!ex) return null;
+  // A swiped card is partly off screen; keep the stamp on the part that still shows.
+  const at = ex.from && {
+    transform: `translate(${ex.from.x}px, ${ex.from.y}px) rotate(${ex.from.x / 40}deg)`,
+    '--stamp-at': `${-ex.from.x / 2}px ${-ex.from.y / 2}px`,
+  };
   return (
-    <div class={`card ghost ghost-${ex.dir}`} key={ex.key} aria-hidden="true">
-      <CardBody task={ex.task} />
+    <div class={`card ghost ghost-${ex.dir} ${ex.stamp ? 'stamped' : ''}`} key={ex.key} style={at} aria-hidden="true" inert>
+      <CardBody task={ex.task} shown={ex} />
+      {ex.stamp && <StampMark stamp={ex.stamp} />}
     </div>
   );
 }

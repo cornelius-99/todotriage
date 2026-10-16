@@ -119,6 +119,7 @@ const PATHS = {
   ),
   left: <path d="m15 18-6-6 6-6" />,
   right: <path d="m9 18 6-6-6-6" />,
+  arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
   hash: <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />,
   subtasks: <path d="M21 12h-8M21 6H8M21 18h-8M3 6v4c0 1.1.9 2 2 2h3M3 10v6c0 1.1.9 2 2 2h3" />,
   target: (
