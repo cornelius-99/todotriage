@@ -5,7 +5,7 @@ import { Setup } from './components/Setup.tsx';
 import { Sheets } from './components/sheets.tsx';
 import { ExitGhost, TaskCard } from './components/TaskCard.tsx';
 import { handleKey } from './shortcuts.ts';
-import { current, list, load, loadError, phase, signOut } from './store.ts';
+import { current, list, load, loadError, loadingText, phase, signOut } from './store.ts';
 
 function Stage() {
   const task = current.value;
@@ -41,7 +41,7 @@ export function App() {
     return (
       <main class="center-screen">
         <div class="spinner" aria-label="Loading" />
-        <p class="muted">Loading your tasks…</p>
+        <p class="muted">{loadingText.value}</p>
       </main>
     );
   if (phase.value === 'error')
@@ -53,7 +53,7 @@ export function App() {
           <button class="btn primary" onClick={() => void load(true)}>
             Try again
           </button>
-          <button class="btn" onClick={signOut}>
+          <button class="btn" onClick={() => signOut()}>
             Use a different token
           </button>
         </div>

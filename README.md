@@ -14,14 +14,30 @@ npm install
 npm run dev
 ```
 
-Open the printed URL, then either paste your Todoist API token or click **Try it with demo data** to explore without touching your account.
+Open http://localhost:5173 and click **Continue with Todoist**, or **Try it with demo data** to explore without touching your account. A personal API token (Todoist → **Settings → Integrations → Developer**) also works, under "Use an API token instead".
 
-Your token is in Todoist under **Settings → Integrations → Developer**. It's stored in this browser's `localStorage` and only sent to `api.todoist.com`.
+## Sign-in (OAuth without a backend)
+
+"Continue with Todoist" uses the OAuth 2 authorization code flow with **PKCE**. The OAuth client is a **Client ID Metadata Document**: the client ID is the URL of [`public/oauth-client.json`](public/oauth-client.json), which the site hosts itself. Todoist fetches that file to learn the app's name, logo and allowed redirect URIs. Metadata clients are public clients, so there's **no client secret** and no server. The whole exchange runs in the browser:
+
+1. The app stores a random `state` and PKCE verifier, then redirects to `todoist.com/oauth/authorize`.
+2. Todoist redirects back to the app with `?code=…&state=…`.
+3. The app checks `state`, then exchanges the code plus verifier at `todoist.com/oauth/access_token`.
+4. The access token (and the refresh token, if Todoist issues one) is kept in `localStorage`. Tokens are refreshed shortly before they expire, or after a 401. Signing out revokes them.
+
+Redirect URIs are listed in the metadata file, not in the Todoist App Console. They must match exactly:
+
+- `https://cornelius-99.github.io/todotriage/` (production)
+- `http://localhost:5173/` (local dev; `npm run dev` pins this port)
+
+Sign-in needs a secure context (HTTPS or localhost) for WebCrypto. On a LAN address like `http://192.168…`, use the API token instead.
+
+**Hosting it elsewhere or forking:** change the URLs in `public/oauth-client.json`. `client_id` must be the file's own public URL, and `redirect_uris` must list your site. Then build with `VITE_TODOIST_CLIENT_ID=<that URL>`.
 
 ### On your iPhone
 
 1. Host the app somewhere (see [Deploying](#deploying)), or for a quick test on your Wi-Fi, run `npm run dev:lan` and open the "Network" URL on the phone.
-2. Open it in Safari and paste your token.
+2. Open it in Safari and tap **Continue with Todoist**. (On a LAN dev address, paste an API token instead.)
 3. Choose **Share → Add to Home Screen**. It launches standalone, with no browser bars.
 
 ## How triage works
@@ -88,19 +104,20 @@ The bottom bar has one-tap **Today / Tomorrow / Weekend / Next week** buttons, a
 
 A GitHub Pages workflow is included in `.github/workflows/deploy.yml`. Push to `main`, then enable **Settings → Pages → Source: GitHub Actions** on the repository. Netlify, Vercel, Cloudflare Pages or any static file server work just as well. Use HTTPS so the iPhone treats it as an installable web app.
 
-Because each person pastes their own token, a public deployment is safe to share: nothing is stored server-side.
+Each person signs in with their own Todoist account, and nothing is stored server-side, so a public deployment is safe to share.
 
 ## Development
 
 ```bash
-npm test        # unit tests for date math and queue logic (vitest)
+npm test        # unit tests: date math, queue logic, PKCE and token refresh (vitest)
 npm run build   # typecheck + production build
 npm run icons   # regenerate the PNG app icons
 ```
 
 Code map:
 
-- `src/api/todoist.ts`: the SDK wrapper (loading, close/reopen/delete/update/move, Sync-based rescheduling)
+- `src/auth.ts`: OAuth sign-in (PKCE), token storage and refresh
+- `src/api/todoist.ts`: the SDK wrapper (loading, close/reopen/delete/update/move, Sync-based rescheduling, refresh-and-retry on 401)
 - `src/api/demo.ts`: the in-memory backend behind demo mode
 - `src/store.ts`: app state (signals), optimistic actions, undo, delayed deletes
 - `src/lib/queue.ts`: which tasks need triage and in what order

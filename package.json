@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:lan": "vite --host",
+    "dev": "vite --port 5173",
+    "dev:lan": "vite --port 5173 --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",

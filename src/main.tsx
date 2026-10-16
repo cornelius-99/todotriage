@@ -3,5 +3,5 @@ import { App } from './app.tsx';
 import { boot } from './store.ts';
 import './styles.css';
 
-boot();
+void boot();
 render(<App />, document.getElementById('app')!);

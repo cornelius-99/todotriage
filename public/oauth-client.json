@@ -1,0 +1,10 @@
+{
+  "client_id": "https://cornelius-99.github.io/todotriage/oauth-client.json",
+  "client_name": "Todo Triage",
+  "client_uri": "https://cornelius-99.github.io/todotriage/",
+  "logo_uri": "https://cornelius-99.github.io/todotriage/icon-512.png",
+  "redirect_uris": ["https://cornelius-99.github.io/todotriage/", "http://localhost:5173/"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none"
+}

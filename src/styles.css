@@ -316,6 +316,48 @@ kbd {
   font-size: 14px;
 }
 
+.form-error.banner {
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.token-details {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.token-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+  list-style: none;
+}
+
+.token-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.token-details summary::after {
+  content: ' ›';
+}
+
+.token-details[open] summary::after {
+  content: ' ⌄';
+}
+
+.token-details form {
+  margin-top: 12px;
+}
+
+.token-details .fine {
+  margin-top: 4px;
+}
+
 .fine {
   font-size: 13px;
   color: var(--muted);

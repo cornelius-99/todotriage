@@ -1,5 +1,6 @@
 import { batch, computed, signal } from '@preact/signals';
 import { DemoBackend } from './api/demo.ts';
+import { loadAuth, revoke, saveAuth, startSignIn, finishSignIn, TokenSource, type Auth } from './auth.ts';
 import { isAuthError, TodoistBackend } from './api/todoist.ts';
 import type { Backend, Due, Label, MoveTarget, Project, Section, SyncDueDate, Task, User } from './api/types.ts';
 import { apiPriority } from './lib/colors.ts';
@@ -9,7 +10,6 @@ import { buildOrder, countPending, isPending, nextAfter, prevBefore, QUEUES, typ
 // ---------------------------------------------------------------------------
 // Persistence helpers (storage can throw in private mode / previews)
 
-const TOKEN_KEY = 'todotriage.token';
 const QUEUE_KEY = 'todotriage.queue';
 
 function storageGet(key: string): string | null {
@@ -134,16 +134,32 @@ function errorText(e: unknown) {
 // ---------------------------------------------------------------------------
 // Setup / loading
 
-export function hasToken() {
-  return !!storageGet(TOKEN_KEY);
+export const loadingText = signal('Loading your tasks…');
+let tokens: TokenSource | null = null;
+
+function useAuth(auth: Auth) {
+  tokens = new TokenSource(auth);
+  backend = new TodoistBackend(tokens);
+  isDemo.value = false;
 }
 
+/** Sign in with a personal API token pasted by the user. */
 export async function connect(token: string) {
-  backend = new TodoistBackend(token.trim());
-  isDemo.value = false;
+  const auth: Auth = { kind: 'token', accessToken: token.trim() };
+  useAuth(auth);
   const ok = await load(true);
-  if (ok) storageSet(TOKEN_KEY, token.trim());
+  if (ok) saveAuth(auth);
   return ok;
+}
+
+/** Sign in with a Todoist account (redirects away to todoist.com). */
+export async function signIn() {
+  loadError.value = '';
+  try {
+    await startSignIn();
+  } catch (e) {
+    loadError.value = errorText(e);
+  }
 }
 
 export function startDemo() {
@@ -152,28 +168,49 @@ export function startDemo() {
   void load(true);
 }
 
-export function boot() {
-  const token = storageGet(TOKEN_KEY);
-  if (token) {
-    backend = new TodoistBackend(token);
+export async function boot() {
+  try {
+    loadingText.value = 'Signing you in…';
+    phase.value = 'loading';
+    const fresh = await finishSignIn();
+    if (fresh) saveAuth(fresh);
+  } catch (e) {
+    loadError.value = errorText(e);
+  }
+  loadingText.value = 'Loading your tasks…';
+  const auth = loadAuth();
+  if (auth) {
+    useAuth(auth);
     void load(true);
   } else {
     phase.value = 'setup';
   }
 }
 
-export function signOut() {
+export function signOut(message = '') {
   flushDeletes();
-  storageSet(TOKEN_KEY, null);
+  const auth = tokens?.current ?? loadAuth();
+  if (auth && !message) revoke(auth);
+  saveAuth(null);
   backend = null;
+  tokens = null;
   batch(() => {
     resetSession();
     tasks.value = new Map();
     user.value = null;
     isDemo.value = false;
     sheet.value = null;
+    loadError.value = message;
     phase.value = 'setup';
   });
+}
+
+function sessionEnded() {
+  signOut(
+    tokens?.current.kind === 'token'
+      ? 'Todoist rejected that token. Paste a fresh one from Settings → Integrations → Developer.'
+      : 'Your Todoist session ended. Please sign in again.',
+  );
 }
 
 function resetSession() {
@@ -209,13 +246,12 @@ export async function load(initial = false): Promise<boolean> {
     return true;
   } catch (e) {
     if (isAuthError(e)) {
-      signOut();
-      loadError.value = 'Todoist rejected that token. Paste a fresh one from Settings → Integrations → Developer.';
+      sessionEnded();
       return false;
     }
     if (initial) {
       loadError.value = errorText(e);
-      phase.value = hasToken() ? 'error' : 'setup';
+      phase.value = loadAuth() ? 'error' : 'setup';
     } else {
       toast(`Refresh failed: ${errorText(e)}`, { kind: 'error' });
     }
@@ -399,8 +435,7 @@ async function perform(id: string | null | undefined, spec: ActionSpec) {
     if (i !== -1) history.splice(i, 1);
     restore(entry);
     if (isAuthError(e)) {
-      signOut();
-      loadError.value = 'Your Todoist token stopped working. Paste a new one.';
+      sessionEnded();
       return;
     }
     toast(`Couldn't ${spec.label.toLowerCase()}: ${errorText(e)}`, { kind: 'error' });
