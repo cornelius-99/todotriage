@@ -3,19 +3,20 @@ import { ActionPanel, EmptyState, Header, MobileBar, Progress, QueueList, Toasts
 import { Icon } from './components/icons.tsx';
 import { Setup } from './components/Setup.tsx';
 import { Sheets } from './components/sheets.tsx';
-import { ExitGhost, TaskCard } from './components/TaskCard.tsx';
+import { ExitGhost, PeekCard, TaskCard } from './components/TaskCard.tsx';
 import { handleKey } from './shortcuts.ts';
-import { current, list, load, loadError, loadingText, phase, signOut } from './store.ts';
+import { current, list, load, loadError, loadingText, phase, signOut, upNext } from './store.ts';
 
 function Stage() {
   const task = current.value;
+  const next = upNext.value;
   const after = task ? list.value.length - list.value.indexOf(task.id) - 1 : 0;
   return (
     <div class="stage">
       {task ? (
         <div class="deck">
-          {after > 1 && <div class="peek peek-2" aria-hidden="true" />}
-          {after > 0 && <div class="peek peek-1" aria-hidden="true" />}
+          {after > 1 && <div class="peek" aria-hidden="true" />}
+          {next && <PeekCard key={next.id} task={next} />}
           <TaskCard key={task.id} task={task} />
           <ExitGhost />
         </div>

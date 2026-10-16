@@ -5,7 +5,7 @@ import { isAuthError, TodoistBackend } from './api/todoist.ts';
 import type { Backend, Due, Label, MoveTarget, Project, Section, SyncDueDate, Task, User } from './api/types.ts';
 import { apiPriority } from './lib/colors.ts';
 import { moveDueDate, safeTz, todayIn } from './lib/dates.ts';
-import { buildOrder, countPending, isPending, nextAfter, prevBefore, QUEUES, type QueueContext, type QueueId } from './lib/queue.ts';
+import { buildOrder, countPending, isPending, nextAfter, prevBefore, QUEUES, reasonsFor, type QueueContext, type QueueId, type Reason } from './lib/queue.ts';
 
 // ---------------------------------------------------------------------------
 // Persistence helpers (storage can throw in private mode / previews)
@@ -33,6 +33,24 @@ function storageSet(key: string, value: string | null) {
 
 export type Sheet = 'schedule' | 'move' | 'labels' | 'edit' | 'help' | 'more' | 'priority';
 export type ExitDir = 'right' | 'left' | 'up' | 'down' | 'fade';
+/** What gets stamped on a card as it leaves the queue. */
+export interface Stamp {
+  kind: 'done' | 'deleted' | 'scheduled' | 'unscheduled' | 'moved' | 'skipped';
+  text: string;
+}
+
+/** A card that just left the queue, as it looked right before. */
+export interface Exit {
+  task: Task;
+  dir: ExitDir;
+  key: number;
+  stamp?: Stamp;
+  /** Where a swipe let go of it. */
+  from?: { x: number; y: number };
+  reasons: Reason[];
+  pos: number;
+  total: number;
+}
 
 export interface Toast {
   id: number;
@@ -72,8 +90,8 @@ export const sheet = signal<Sheet | null>(null);
 export const toasts = signal<Toast[]>([]);
 export const stats = signal<Stats>(emptyStats());
 export const refreshing = signal(false);
-/** A card that just left the queue, rendered briefly as a "ghost" so it can animate out. */
-export const exiting = signal<{ task: Task; dir: ExitDir; key: number } | null>(null);
+/** Rendered briefly as a "ghost" so the card can be stamped and animate out. */
+export const exiting = signal<Exit | null>(null);
 
 const clock = signal(Date.now());
 let lastLoadAt = 0;
@@ -99,6 +117,18 @@ const pending = (id: string) => isPending(id, queue.value, ctx.value);
 export const list = computed(() => order.value.filter((id) => isPending(id, queue.value, ctx.value)));
 export const remaining = computed(() => list.value.filter((id) => !kept.value.has(id)).length);
 export const current = computed(() => (currentId.value ? (tasks.value.get(currentId.value) ?? null) : null));
+/** The task that takes over once the current one is dealt with. Kept cards were already seen; prefer the next unseen one. */
+const successor = (id: string) => nextAfter(id, order.value, (x) => pending(x) && !kept.value.has(x)) ?? nextAfter(id, order.value, pending);
+export const upNext = computed(() => {
+  const id = currentId.value && successor(currentId.value);
+  return id ? (tasks.value.get(id) ?? null) : null;
+});
+
+/** Snapshot a card before it changes, so its exit ghost still shows its buckets and place in the queue. */
+function exitOf(task: Task, dir: ExitDir, stamp?: Stamp): Exit {
+  const ids = list.value;
+  return { task, dir, key: Date.now(), stamp, reasons: reasonsFor(task, queue.value, ctx.value), pos: ids.indexOf(task.id), total: ids.length };
+}
 export const counts = computed(() => {
   const c = ctx.value;
   return Object.fromEntries(QUEUES.map((q) => [q.id, countPending(q.id, c)])) as Record<QueueId, number>;
@@ -304,12 +334,13 @@ if (typeof document !== 'undefined') {
 export function skip() {
   const id = currentId.value;
   if (!id) return;
+  const leaving = exitOf(tasks.value.get(id)!, 'up', { kind: 'skipped', text: 'Skipped' });
   batch(() => {
     if (!kept.value.has(id)) {
       kept.value = new Set(kept.value).add(id);
       stats.value = { ...stats.value, kept: stats.value.kept + 1 };
     }
-    exiting.value = { task: tasks.value.get(id)!, dir: 'up', key: Date.now() };
+    exiting.value = leaving;
     currentId.value = nextAfter(id, order.value, pending);
   });
 }
@@ -389,6 +420,7 @@ interface ActionSpec {
   ack?: boolean;
   stat?: keyof Stats;
   dir?: ExitDir;
+  stamp?: Stamp;
   call: (b: Backend) => Promise<unknown>;
   revert: (b: Backend) => Promise<unknown>;
   quiet?: boolean;
@@ -407,6 +439,7 @@ async function perform(id: string | null | undefined, spec: ActionSpec) {
     stat: spec.stat,
     revert: () => spec.revert(api()),
   };
+  const leaving = exitOf(before, spec.dir ?? 'fade', spec.stamp);
 
   batch(() => {
     const updated: Task[] = [];
@@ -420,9 +453,8 @@ async function perform(id: string | null | undefined, spec: ActionSpec) {
     if (spec.ack) toggleIn(dateAck, id, true);
     if (spec.stat) stats.value = { ...stats.value, [spec.stat]: stats.value[spec.stat] + 1 };
     if (currentId.value === id && !pending(id)) {
-      exiting.value = { task: before, dir: spec.dir ?? 'fade', key: Date.now() };
-      // Kept cards were already seen; prefer the next unseen one.
-      currentId.value = nextAfter(id, order.value, (x) => pending(x) && !kept.value.has(x)) ?? nextAfter(id, order.value, pending);
+      exiting.value = leaving;
+      currentId.value = successor(id);
     }
   });
   history.push(entry);
@@ -444,6 +476,7 @@ async function perform(id: string | null | undefined, spec: ActionSpec) {
 
 function restore(entry: UndoEntry) {
   batch(() => {
+    exiting.value = null;
     setTasks(entry.before);
     toggleIn(gone, entry.id, entry.flags.gone);
     for (const k of entry.before.slice(1)) toggleIn(gone, k.id, false);
@@ -495,6 +528,7 @@ export function complete(id = currentId.value) {
     goneChildren: true,
     stat: 'completed',
     dir: 'right',
+    stamp: { kind: 'done', text: 'Done' },
     call: (b) => b.close(id),
     // Recurring tasks don't close, they roll forward; put the old date back instead.
     revert: async (b) => {
@@ -526,6 +560,7 @@ export function scheduleDay(day: string | null, label?: string, id = currentId.v
     ack: true,
     stat: 'scheduled',
     dir: 'left',
+    stamp: day === null ? { kind: 'unscheduled', text: 'No date' } : { kind: 'scheduled', text: label ?? 'Scheduled' },
     call: (b) => b.setDue(id, newDue),
     revert: (b) => b.setDue(id, dueForSync(t.due)),
   });
@@ -540,6 +575,7 @@ export function scheduleText(text: string, id = currentId.value) {
     ack: true,
     stat: 'scheduled',
     dir: 'left',
+    stamp: { kind: 'scheduled', text: text.trim() },
     call: async (b) => {
       const updated = await b.update(id, { dueString: text.trim() });
       setTasks([{ ...tasks.value.get(id)!, due: updated.due }]);
@@ -564,6 +600,7 @@ export function moveTo(target: { projectId: string; sectionId?: string | null },
     applyChildren: (x) => ({ ...x, projectId: projectId, sectionId: sectionId }),
     stat: 'moved',
     dir: 'down',
+    stamp: { kind: 'moved', text: where },
     call: (b) => b.move(id, to),
     revert: (b) => b.move(id, back),
   });
@@ -634,6 +671,7 @@ export function remove(id = currentId.value) {
     goneChildren: true,
     stat: 'deleted',
     dir: 'fade',
+    stamp: { kind: 'deleted', text: 'Deleted' },
     // Only schedules the delete, so an undo queued behind it on the task's chain runs right away.
     call: async (b) => {
       const run = () => {
