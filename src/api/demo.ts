@@ -93,6 +93,7 @@ export class DemoBackend implements Backend {
       lang: 'en',
       ...extra,
     });
+    const at = (offset: number, time: string): Due => due(offset, { date: `${addDays(today, offset)}T${time}:00`, string: `${addDays(today, offset)} ${time}` });
 
     this.user = {
       id: 'demo',
@@ -155,6 +156,7 @@ export class DemoBackend implements Backend {
         addedAt: ago(14),
         description: 'Washer size is probably 1/2". Check the hardware store on the way home.',
       },
+      { id: 't24', content: 'Yoga class', projectId: 'personal', due: at(0, '18:30'), duration: { amount: 60, unit: 'minute' }, addedAt: ago(20) },
       { id: 't9', content: 'Write launch announcement draft', projectId: 'launch', priority: 4, due: due(0), addedAt: ago(5), labels: ['deep-work', 'computer'] },
       // Inbox
       { id: 't10', content: 'Look into that podcast Alex recommended', projectId: 'inbox', addedAt: ago(1) },
@@ -165,6 +167,13 @@ export class DemoBackend implements Backend {
       { id: 't15', content: 'Collect dietary restrictions', projectId: 'inbox', parentId: 't13', addedAt: ago(2), childOrder: 2 },
       { id: 't16', content: 'Cancel unused streaming subscription', projectId: 'inbox', due: due(-1), addedAt: ago(6), labels: ['quick'] },
       { id: 't17', content: 'Try the new ramen place on 5th', projectId: 'inbox', addedAt: ago(21) },
+      // Later this week: not in any queue, but they show up on the drag-to-schedule calendar.
+      { id: 't18', content: 'Team standup', projectId: 'work', sectionId: 'w-meet', due: at(1, '09:30'), duration: { amount: 30, unit: 'minute' }, addedAt: ago(40) },
+      { id: 't19', content: 'Lunch with Priya', projectId: 'personal', due: at(1, '12:30'), duration: { amount: 60, unit: 'minute' }, addedAt: ago(5) },
+      { id: 't20', content: 'Launch go/no-go', projectId: 'launch', priority: 4, due: at(2, '15:00'), duration: { amount: 60, unit: 'minute' }, addedAt: ago(12) },
+      { id: 't21', content: 'Gym', projectId: 'personal', due: at(2, '07:30'), duration: { amount: 60, unit: 'minute' }, addedAt: ago(70) },
+      { id: 't22', content: 'Call the landlord', projectId: 'home', due: at(3, '17:00'), addedAt: ago(3), labels: ['phone'] },
+      { id: 't23', content: 'Team standup', projectId: 'work', sectionId: 'w-meet', due: at(3, '09:30'), duration: { amount: 30, unit: 'minute' }, addedAt: ago(40) },
     ];
     for (const s of seed) this.tasks.set(s.id, makeTask(s));
   }
@@ -183,6 +192,15 @@ export class DemoBackend implements Backend {
       overdue: active.filter((t) => t.due && day(t) < today),
       today: active.filter((t) => t.due && day(t) === today),
     };
+  }
+
+  async upcoming(): Promise<Task[]> {
+    await delay();
+    const today = todayIn(this.user.tzInfo.timezone);
+    const end = addDays(today, 7);
+    return [...this.tasks.values()]
+      .filter((t) => !this.closed.has(t.id) && t.due && t.due.date.slice(0, 10) >= today && t.due.date.slice(0, 10) < end)
+      .map((t) => structuredClone(t));
   }
 
   private get(id: string) {

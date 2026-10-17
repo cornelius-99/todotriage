@@ -30,6 +30,8 @@ export interface Snapshot {
 /** The operations the app performs. Implemented by the Todoist SDK wrapper and the demo backend. */
 export interface Backend {
   load(): Promise<Snapshot>;
+  /** Tasks due over the next week, for the drag-to-schedule calendar. */
+  upcoming(): Promise<Task[]>;
   close(id: string): Promise<void>;
   reopen(id: string): Promise<void>;
   remove(id: string): Promise<void>;

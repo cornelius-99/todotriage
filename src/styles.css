@@ -1394,27 +1394,465 @@ kbd {
 }
 
 .bar-btn.done {
-  color: #fff;
-}
-
-.bar-btn.done .icon {
-  width: 56px;
-  height: 56px;
-  padding: 15px;
-  border-radius: 50%;
-  background: var(--done);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--done) 40%, transparent);
-  stroke-width: 3;
-  margin-top: -18px;
-}
-
-.bar-btn.done span {
   color: var(--done);
 }
 
-.bar-btn.done:active:not(:disabled) {
+/* The middle button: tap for the date sheet, press and drag up to drop the task on the calendar. */
+.sched-fab {
+  color: #fff;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.sched-fab .icon {
+  width: 56px;
+  height: 56px;
+  padding: 14px;
+  border-radius: 50%;
+  background: var(--schedule);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--schedule) 40%, transparent);
+  margin-top: -18px;
+  transition: transform 0.15s;
+}
+
+.sched-fab span {
+  color: var(--schedule);
+}
+
+/* A little "drag up" nub above the button. */
+.sched-fab::before {
+  content: '';
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--schedule) 45%, transparent);
+  margin: -14px 0 8px;
+}
+
+.sched-fab:active:not(:disabled) {
   background: none;
-  transform: scale(0.95);
+}
+
+.sched-fab:active:not(:disabled) .icon,
+.sched-fab.held .icon {
+  transform: scale(0.92);
+}
+
+/* ------------------------------------------------------------------ drag-to-schedule calendar */
+
+.sd {
+  position: fixed;
+  inset: 0;
+  /* Over the toasts too: the thumb is busy, and they'd cover slots. */
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  user-select: none;
+  -webkit-user-select: none;
+  animation: sd-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sd.closing {
+  animation: sd-out 0.18s ease-in forwards;
+}
+
+@keyframes sd-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@keyframes sd-out {
+  to {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+.sd-head {
+  flex: none;
+  padding: max(12px, env(safe-area-inset-top)) 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sd-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.sd-task span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sd-readout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--schedule);
+  min-height: 34px;
+}
+
+.sd-readout.cancel,
+.sd-readout.past {
+  color: var(--faint);
+}
+
+.sd-days {
+  flex: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px repeat(var(--cols), 1fr);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.sd-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 2px 4px;
+  margin: 0 2px;
+  border-radius: 12px;
+  transition: background 0.12s;
+}
+
+.sd-dow {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.sd-num {
+  font-size: 20px;
+  font-weight: 700;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+
+.sd-day.today .sd-dow {
+  color: var(--accent);
+}
+
+.sd-day.today .sd-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sd-untimed {
+  font-size: 10.5px;
+  color: var(--faint);
+  height: 14px;
+  white-space: nowrap;
+}
+
+.sd-day.aimed .sd-dow {
+  color: var(--schedule);
+}
+
+.sd-day.allday {
+  background: var(--schedule);
+}
+
+.sd-day.allday .sd-dow,
+.sd-day.allday .sd-untimed {
+  color: #fff;
+}
+
+.sd-day.allday .sd-num {
+  background: #fff;
+  color: var(--schedule);
+}
+
+.sd-gutter-head {
+  display: grid;
+  place-items: center;
+}
+
+.sd-page {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--faint);
+}
+
+.sd-page.right {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sd-page.on {
+  background: var(--schedule);
+  color: #fff;
+}
+
+.sd-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.sd-grid {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.sd-canvas {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px repeat(var(--cols), 1fr);
+  /* An hour line, and a fainter one at the half hour. */
+  background:
+    linear-gradient(var(--border) 0 1px, transparent 1px),
+    linear-gradient(transparent calc(var(--hour) / 2), color-mix(in srgb, var(--border) 50%, transparent) 0 calc(var(--hour) / 2 + 1px), transparent 0);
+  background-size: 100% var(--hour);
+}
+
+.sd-hours {
+  position: relative;
+  background: var(--bg);
+}
+
+.sd-hour {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sd-hour.covered {
+  visibility: hidden;
+}
+
+.sd-col {
+  position: relative;
+  border-left: 1px solid var(--border);
+  transition: background 0.12s;
+}
+
+.sd-col.aimed {
+  background: color-mix(in srgb, var(--schedule-soft) 60%, transparent);
+}
+
+.sd-past {
+  position: absolute;
+  inset: 0 0 auto;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--border) 50%, transparent) 0 1px, transparent 1px 7px);
+  background-color: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+
+.sd-now {
+  position: absolute;
+  left: -4px;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--accent);
+  z-index: 2;
+}
+
+.sd-now::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sd-event {
+  position: absolute;
+  padding: 0 1px;
+  overflow: hidden;
+}
+
+.sd-event span {
+  display: block;
+  height: 100%;
+  padding: 1px 4px;
+  border-radius: 5px;
+  border-left: 3px solid var(--c);
+  background: color-mix(in srgb, var(--c) 16%, var(--surface));
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.sd-event.short span {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sd-drop {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  z-index: 3;
+  min-height: 18px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--schedule);
+  color: #fff;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--schedule) 45%, transparent);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sd-drop strong {
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+
+.sd-drop span {
+  opacity: 0.9;
+}
+
+.sd-drop.landed {
+  animation: sd-land 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+@keyframes sd-land {
+  0% {
+    transform: scale(1.12);
+  }
+  45% {
+    transform: scale(0.96);
+  }
+}
+
+.sd-guide {
+  position: absolute;
+  left: 46px;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--schedule);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sd-bubble {
+  position: absolute;
+  left: -46px;
+  top: -10px;
+  width: 44px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 18px;
+  border-radius: 9px;
+  background: var(--schedule);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fades at the scroll edges, tinted while auto-scrolling. */
+.sd-body::before,
+.sd-body::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.sd-body::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+}
+
+.sd-body::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg), transparent);
+}
+
+.sd-body.scroll-up::before {
+  opacity: 1;
+  height: 44px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--schedule) 22%, var(--bg)), transparent);
+}
+
+.sd-body.scroll-down::after {
+  opacity: 1;
+  height: 44px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--schedule) 22%, var(--bg)), transparent);
+}
+
+.sd-cancel {
+  flex: none;
+  height: calc(118px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.12s;
+}
+
+.sd-cancel-ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--border);
+  transition: all 0.12s;
+}
+
+.sd-cancel.on {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.sd-cancel.on .sd-cancel-ring {
+  border: 2px solid var(--text);
+  background: var(--surface);
 }
 
 /* ------------------------------------------------------------------ sheets */

@@ -62,6 +62,10 @@ export class TodoistBackend implements Backend {
     });
   }
 
+  upcoming() {
+    return this.call((api) => all((cursor) => api.getTasksByFilter({ query: 'next 7 days', lang: 'en', cursor, limit: 200 })));
+  }
+
   async close(id: string) {
     await this.call((api) => api.closeTask(id));
   }
