@@ -167,18 +167,10 @@ export function ActionPanel() {
   );
 }
 
-/** Phone action bar: quick dates on top, big thumb targets below, with Schedule in the middle (tap for the sheet, drag up for the calendar). */
+/** Phone action bar: big thumb targets, with Schedule in the middle (tap for the sheet, drag up for the calendar). */
 export function MobileBar() {
   const task = current.value;
   const off = !task;
-  const pill = (id: 'today' | 'tomorrow' | 'weekend' | 'nextweek', label: string) => {
-    const p = presetFor(id);
-    return (
-      <button class="date-pill" disabled={off} onClick={() => scheduleDay(p.day, p.label)}>
-        {label}
-      </button>
-    );
-  };
   const big = (icon: IconName, label: string, onClick: () => void, tone?: string) => (
     <button class={`bar-btn ${tone ?? ''}`} disabled={off && tone !== 'menu'} onClick={onClick}>
       <Icon name={icon} size={22} />
@@ -187,12 +179,6 @@ export function MobileBar() {
   );
   return (
     <div class="mobile-bar">
-      <div class="date-pills">
-        {pill('today', 'Today')}
-        {pill('tomorrow', 'Tomorrow')}
-        {pill('weekend', 'Weekend')}
-        {pill('nextweek', 'Next week')}
-      </div>
       <div class="bar-row">
         {big('skip', 'Skip', skip)}
         {big('move', 'Move', openSheet('move'))}

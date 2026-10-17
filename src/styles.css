@@ -1339,37 +1339,6 @@ kbd {
   padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
 }
 
-.date-pills {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  padding: 2px 2px 8px;
-}
-
-.date-pills::-webkit-scrollbar {
-  display: none;
-}
-
-.date-pill {
-  min-width: 0;
-  padding: 9px 4px;
-  border-radius: 99px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-weight: 600;
-  font-size: 13.5px;
-  white-space: nowrap;
-  color: var(--schedule);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
-.date-pill:active:not(:disabled) {
-  background: var(--schedule-soft);
-}
-
 .bar-row {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -2514,7 +2483,7 @@ kbd {
   }
 
   .toasts {
-    bottom: calc(150px + env(safe-area-inset-bottom));
+    bottom: calc(100px + env(safe-area-inset-bottom));
   }
 
   .sheet-backdrop {
