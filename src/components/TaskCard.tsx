@@ -6,9 +6,8 @@ import { reasonsFor } from '../lib/queue.ts';
 import {
   childrenOf,
   complete,
-  dateAck,
+  ctx,
   exiting,
-  gone,
   inboxId,
   list,
   projectById,
@@ -17,7 +16,6 @@ import {
   sectionById,
   sheet,
   skip,
-  tasks,
   today,
   tz,
   type Exit,
@@ -119,14 +117,9 @@ function CardBody({ task, expanded, onExpand, shown }: { task: Task; expanded?: 
   const p = uiPriority(task.priority);
   const reasons =
     shown?.reasons ??
-    reasonsFor(task, queue.value, {
-      today: today.value,
-      tz: tz.value,
-      inboxId: inboxId.value,
-      tasks: tasks.value,
-      gone: gone.value,
-      dateAck: dateAck.value,
-    });
+    reasonsFor(task, queue.value, ctx.value);
+  // Out of the Inbox already; the card stays until it also gets a date.
+  const movedOut = task.projectId !== inboxId.value;
   const pos = shown ? shown.pos : list.value.indexOf(task.id);
   const total = shown ? shown.total : list.value.length;
   const long = task.description.length > 220 || task.description.split('\n').length > 5;
@@ -136,8 +129,8 @@ function CardBody({ task, expanded, onExpand, shown }: { task: Task; expanded?: 
         <span class="buckets">
           {reasons.map((r) => (
             <span class={`bucket bucket-${r}`} key={r}>
-              <Icon name={r === 'inbox' ? 'inbox' : r === 'today' ? 'sun' : 'clock'} size={13} />
-              {r === 'overdue' && task.due ? overdueBy(task.due, today.value, tz.value) : r === 'today' ? 'Today' : 'Inbox'}
+              <Icon name={r === 'inbox' ? (movedOut ? 'calendar' : 'inbox') : r === 'today' ? 'sun' : 'clock'} size={13} />
+              {r === 'overdue' && task.due ? overdueBy(task.due, today.value, tz.value) : r === 'today' ? 'Today' : movedOut ? 'Needs a date' : 'Inbox'}
             </span>
           ))}
         </span>

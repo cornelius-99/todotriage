@@ -83,6 +83,8 @@ export const tasks = signal(new Map<string, Task>());
 export const upcoming = signal<Task[]>([]);
 export const gone = signal(new Set<string>());
 export const dateAck = signal(new Set<string>());
+export const dated = signal(new Set<string>());
+export const leftInbox = signal(new Set<string>());
 export const kept = signal(new Set<string>());
 const storedQueue = storageGet(QUEUE_KEY) as QueueId | null;
 export const queue = signal<QueueId>(QUEUES.some((q) => q.id === storedQueue) ? storedQueue! : 'all');
@@ -105,13 +107,15 @@ export const today = computed(() => {
 });
 export const inboxId = computed(() => user.value?.inboxProjectId ?? projects.value.find((p) => 'inboxProject' in p && p.inboxProject)?.id ?? '');
 
-const ctx = computed<QueueContext>(() => ({
+export const ctx = computed<QueueContext>(() => ({
   today: today.value,
   tz: tz.value,
   inboxId: inboxId.value,
   tasks: tasks.value,
   gone: gone.value,
   dateAck: dateAck.value,
+  dated: dated.value,
+  leftInbox: leftInbox.value,
 }));
 
 const pending = (id: string) => isPending(id, queue.value, ctx.value);
@@ -292,6 +296,8 @@ function sessionEnded() {
 function resetSession() {
   gone.value = new Set();
   dateAck.value = new Set();
+  dated.value = new Set();
+  leftInbox.value = new Set();
   kept.value = new Set();
   stats.value = emptyStats();
   history.length = 0;
@@ -309,6 +315,8 @@ export async function load(initial = false): Promise<boolean> {
     clock.value = Date.now();
     const map = new Map<string, Task>();
     for (const t of [...snap.overdue, ...snap.today, ...snap.inbox]) map.set(t.id, t);
+    // Moved out of the Inbox but not dated yet: no longer in any fetched list, yet still waiting for a date.
+    if (!initial) for (const id of leftInbox.value) if (!map.has(id) && !gone.value.has(id) && tasks.value.has(id)) map.set(id, tasks.value.get(id)!);
     batch(() => {
       if (initial) resetSession();
       user.value = snap.user;
@@ -431,7 +439,7 @@ interface UndoEntry {
   label: string;
   id: string;
   before: Task[];
-  flags: { gone: boolean; ack: boolean; kept: boolean };
+  flags: { gone: boolean; ack: boolean; dated: boolean; leftInbox: boolean; kept: boolean };
   stat?: keyof Stats;
   revert: () => Promise<unknown>;
 }
@@ -476,6 +484,10 @@ interface ActionSpec {
   gone?: boolean;
   goneChildren?: boolean;
   ack?: boolean;
+  /** Gives the task an actual date. */
+  dated?: boolean;
+  /** Takes the task out of the Inbox. */
+  leftInbox?: boolean;
   stat?: keyof Stats;
   dir?: ExitDir;
   stamp?: Stamp;
@@ -493,7 +505,7 @@ async function perform(id: string | null | undefined, spec: ActionSpec) {
     label: spec.label,
     id,
     before: [before, ...kids],
-    flags: { gone: gone.value.has(id), ack: dateAck.value.has(id), kept: kept.value.has(id) },
+    flags: { gone: gone.value.has(id), ack: dateAck.value.has(id), dated: dated.value.has(id), leftInbox: leftInbox.value.has(id), kept: kept.value.has(id) },
     stat: spec.stat,
     revert: () => spec.revert(api()),
   };
@@ -509,6 +521,8 @@ async function perform(id: string | null | undefined, spec: ActionSpec) {
       if (spec.goneChildren) for (const k of kids) toggleIn(gone, k.id, true);
     }
     if (spec.ack) toggleIn(dateAck, id, true);
+    if (spec.dated) toggleIn(dated, id, true);
+    if (spec.leftInbox) toggleIn(leftInbox, id, true);
     if (spec.stat) stats.value = { ...stats.value, [spec.stat]: stats.value[spec.stat] + 1 };
     if (currentId.value === id && !pending(id)) {
       exiting.value = leaving;
@@ -539,6 +553,8 @@ function restore(entry: UndoEntry) {
     toggleIn(gone, entry.id, entry.flags.gone);
     for (const k of entry.before.slice(1)) toggleIn(gone, k.id, false);
     toggleIn(dateAck, entry.id, entry.flags.ack);
+    toggleIn(dated, entry.id, entry.flags.dated);
+    toggleIn(leftInbox, entry.id, entry.flags.leftInbox);
     toggleIn(kept, entry.id, entry.flags.kept);
     if (entry.stat) stats.value = { ...stats.value, [entry.stat]: Math.max(0, stats.value[entry.stat] - 1) };
     if (!order.value.includes(entry.id)) order.value = buildOrder(queue.value, ctx.value);
@@ -616,6 +632,7 @@ export function scheduleDay(day: string | null, label?: string, id = currentId.v
       due: newDue ? ({ string: label ?? day ?? '', isRecurring: false, ...t.due, ...newDue, datetime: null } as Due) : null,
     }),
     ack: true,
+    dated: day !== null,
     stat: 'scheduled',
     dir: 'left',
     stamp: day === null ? { kind: 'unscheduled', text: 'No date' } : { kind: 'scheduled', text: label ?? 'Scheduled' },
@@ -635,6 +652,7 @@ export function scheduleAt(day: string, time: string, id = currentId.value) {
     label: `Scheduled “${short(t)}” for ${when}`,
     apply: (x) => ({ ...x, due: { string: when, isRecurring: false, ...t.due, ...newDue, datetime: null } as Due }),
     ack: true,
+    dated: true,
     stat: 'scheduled',
     dir: 'left',
     stamp: { kind: 'scheduled', text: when },
@@ -650,6 +668,7 @@ export function scheduleText(text: string, id = currentId.value) {
   void perform(id, {
     label: `Scheduled “${short(t)}”: ${text.trim()}`,
     ack: true,
+    dated: true,
     stat: 'scheduled',
     dir: 'left',
     stamp: { kind: 'scheduled', text: text.trim() },
@@ -675,6 +694,7 @@ export function moveTo(target: { projectId: string; sectionId?: string | null },
     label: `Moved “${short(t)}” to ${where}`,
     apply: (x) => ({ ...x, projectId: projectId, sectionId: sectionId, parentId: null }),
     applyChildren: (x) => ({ ...x, projectId: projectId, sectionId: sectionId }),
+    leftInbox: t.projectId === inboxId.value && projectId !== inboxId.value,
     stat: 'moved',
     dir: 'down',
     stamp: { kind: 'moved', text: where },
