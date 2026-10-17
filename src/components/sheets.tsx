@@ -1,26 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { Project } from '../api/types.ts';
-import { todoistColor, uiPriority } from '../lib/colors.ts';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { PRIORITY_COLOR, todoistColor, uiPriority } from '../lib/colors.ts';
 import { datePresets, dayLabel, describeDue, dueDay, shortDate } from '../lib/dates.ts';
 import { fuzzyFilter } from '../lib/fuzzy.ts';
 import { QUEUE_CHORDS, SHORTCUTS } from '../shortcuts.ts';
 import {
   current,
+  destinations,
   editTask,
   isDemo,
   labels,
   load,
   moveTo,
   openInTodoist,
-  projects,
   remove,
   scheduleDay,
   scheduleText,
-  sections,
   setLabels,
   setPriority,
   sheet,
   signOut,
+  skip,
   today,
   tz,
   undo,
@@ -91,43 +90,11 @@ function ScheduleSheet() {
   );
 }
 
-const parentOf = (p: Project) => ('parentId' in p ? p.parentId : null);
-
 function MoveSheet() {
   const task = current.value;
   const [query, setQuery] = useState('');
-  const rows = useMemo(() => {
-    const byParent = new Map<string | null, Project[]>();
-    for (const p of projects.value) {
-      const key = parentOf(p);
-      byParent.set(key, [...(byParent.get(key) ?? []), p]);
-    }
-    const out: { projectId: string; sectionId: string | null; name: string; path: string; color: string; depth: number }[] = [];
-    const walk = (parent: string | null, depth: number, trail: string) => {
-      const kids = (byParent.get(parent) ?? []).sort((a, b) => {
-        // Inbox first, then Todoist's own order.
-        const ia = 'inboxProject' in a && a.inboxProject ? -1 : 0;
-        const ib = 'inboxProject' in b && b.inboxProject ? -1 : 0;
-        return ia - ib || a.childOrder - b.childOrder;
-      });
-      for (const p of kids) {
-        const path = trail ? `${trail} / ${p.name}` : p.name;
-        out.push({ projectId: p.id, sectionId: null, name: p.name, path, color: todoistColor(p.color), depth });
-        for (const s of sections.value.filter((s) => s.projectId === p.id)) {
-          out.push({ projectId: p.id, sectionId: s.id, name: s.name, path: `${path} / ${s.name}`, color: todoistColor(p.color), depth: depth + 1 });
-        }
-        walk(p.id, depth + 1, path);
-      }
-    };
-    walk(null, 0, '');
-    // Projects whose parent we don't know (e.g. archived parent) still need to be reachable.
-    const seen = new Set(out.map((r) => r.projectId));
-    for (const p of projects.value) if (!seen.has(p.id)) out.push({ projectId: p.id, sectionId: null, name: p.name, path: p.name, color: todoistColor(p.color), depth: 0 });
-    return out;
-  }, [projects.value, sections.value]);
-
   if (!task) return null;
-  const filtered = fuzzyFilter(rows, query, (r) => r.path);
+  const filtered = fuzzyFilter(destinations.value, query, (r) => r.path);
   const items: PickItem[] = filtered.map((r) => ({
     id: `${r.projectId}:${r.sectionId ?? ''}`,
     label: query ? r.path : r.name,
@@ -251,8 +218,6 @@ function EditSheet() {
   );
 }
 
-const PRIORITY_COLORS = ['', 'var(--p1)', 'var(--p2)', 'var(--p3)', 'var(--muted)'];
-
 function PriorityButtons({ onPick }: { onPick?: () => void }) {
   const task = current.value;
   if (!task) return null;
@@ -263,7 +228,7 @@ function PriorityButtons({ onPick }: { onPick?: () => void }) {
         <button
           key={p}
           class={`prio-btn ${now === p ? 'on' : ''}`}
-          style={{ color: PRIORITY_COLORS[p] }}
+          style={{ color: PRIORITY_COLOR[p] }}
           onClick={() => {
             setPriority(p, task.id);
             onPick?.();
@@ -296,16 +261,12 @@ function MoreSheet() {
   return (
     <Sheet title={task ? 'More actions' : 'Menu'} subtitle={task?.content} onClose={close}>
       {task && (
-        <>
-          <div class="more-section">Priority</div>
-          <PriorityButtons />
-          <div class="more-grid">
-            {row('tag', 'Labels', () => (sheet.value = 'labels'))}
-            {row('pencil', 'Edit', () => (sheet.value = 'edit'))}
-            {row('external', 'Open in Todoist', () => (close(), openInTodoist(task.id)))}
-            {row('trash', 'Delete', () => (close(), remove(task.id)), 'danger')}
-          </div>
-        </>
+        <div class="more-grid">
+          {row('skip', 'Skip', () => (close(), skip()))}
+          {row('pencil', 'Edit', () => (sheet.value = 'edit'))}
+          {row('external', 'Open in Todoist', () => (close(), openInTodoist(task.id)))}
+          {row('trash', 'Delete', () => (close(), remove(task.id)), 'danger')}
+        </div>
       )}
       <div class="more-grid">
         {row('undo', 'Undo last', () => (close(), void undo()))}
@@ -331,6 +292,9 @@ function HelpSheet() {
             <div><dt><span class="swatch move" />Long swipe left</dt><dd>Move to project…</dd></div>
             <div><dt><span class="swatch skip" />Swipe up</dt><dd>Skip</dd></div>
             <div><dt><span class="swatch schedule" />Drag up from Schedule</dt><dd>Drop on a time</dd></div>
+            <div><dt><span class="swatch move" />Drag up from Move</dt><dd>Drop on a project</dd></div>
+            <div><dt><span class="swatch label" />Drag up from Labels</dt><dd>Add or remove a label</dd></div>
+            <div><dt><span class="swatch priority" />Drag up from Priority</dt><dd>Set the priority</dd></div>
           </dl>
         </section>
         {groups.map((g) => (

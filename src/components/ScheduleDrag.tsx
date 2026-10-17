@@ -5,6 +5,7 @@ import { todoistColor } from '../lib/colors.ts';
 import { addDays, clockTime, dayLabel, diffDays, dueDay, dueTime, minutesNow, shortDate, WEEKDAY, weekday } from '../lib/dates.ts';
 import { current, gone, projectById, scheduleAt, scheduleDay, sheet, tasks, today, tz, upcoming } from '../store.ts';
 import { Icon } from './icons.tsx';
+import { finger, usePressDrag } from './press.ts';
 
 // Press the Schedule button and drag up: a few days of calendar open under the finger, and
 // letting go over a slot schedules the task right then. Over a day's header it gets the day
@@ -33,15 +34,11 @@ const EDGE = 44;
 const DWELL = 550;
 /** How long to stay in a top or bottom zone before it scrolls, so passing through doesn't. */
 const SCROLL_DELAY = 180;
-/** Holding the button this long opens the calendar without dragging. */
-const HOLD = 320;
 const LAND_MS = 420;
 const CLOSE_MS = 180;
 
 const stage = signal<'closed' | 'open' | 'landing' | 'closing'>('closed');
 const landed = signal<Aim | null>(null);
-// The fingertip, written on every pointer move and read once a frame by the calendar.
-const finger = { x: 0, y: 0 };
 let pointing: Pointing = 'cancel';
 
 const sameAim = (a: Pointing, b: Pointing) =>
@@ -72,47 +69,9 @@ function finish(cancelled: boolean) {
 
 /** The big round button in the phone bar. Tap for the date sheet; press and drag up to drop the task on a time. */
 export function ScheduleButton({ disabled }: { disabled: boolean }) {
-  const press = useRef<{ id: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
-  // A press that opened the calendar isn't also a tap.
-  const dragged = useRef(false);
-
-  const onPointerDown = (e: PointerEvent) => {
-    if (disabled || e.button !== 0 || stage.value !== 'closed') return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    finger.x = e.clientX;
-    finger.y = e.clientY;
-    dragged.current = false;
-    press.current = { id: e.pointerId, y: e.clientY, timer: setTimeout(begin, HOLD) };
-  };
-  const onPointerMove = (e: PointerEvent) => {
-    const p = press.current;
-    if (!p || p.id !== e.pointerId) return;
-    finger.x = e.clientX;
-    finger.y = e.clientY;
-    if (p.y - e.clientY > 10) begin();
-  };
-  const onPointerUp = (e: PointerEvent) => {
-    const p = press.current;
-    if (!p || p.id !== e.pointerId) return;
-    clearTimeout(p.timer);
-    press.current = null;
-    dragged.current = stage.value !== 'closed';
-    if (stage.value === 'open') finish(e.type !== 'pointerup');
-  };
-
+  const press = usePressDrag({ disabled, idle: () => stage.value === 'closed', open: begin, release: finish, tap: () => (sheet.value = 'schedule') });
   return (
-    <button
-      class={`bar-btn sched-fab ${stage.value !== 'closed' ? 'held' : ''}`}
-      disabled={disabled}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onLostPointerCapture={onPointerUp}
-      onClick={() => (dragged.current ? (dragged.current = false) : (sheet.value = 'schedule'))}
-      onContextMenu={(e) => e.preventDefault()}
-      aria-label="Schedule (drag up to pick a time)"
-    >
+    <button class={`bar-btn sched-fab ${stage.value !== 'closed' ? 'held' : ''}`} disabled={disabled} {...press} aria-label="Schedule (drag up to pick a time)">
       <Icon name="calendarClock" size={26} />
       <span>Schedule</span>
     </button>

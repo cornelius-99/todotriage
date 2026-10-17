@@ -3,7 +3,7 @@ import { DemoBackend } from './api/demo.ts';
 import { loadAuth, revoke, saveAuth, startSignIn, finishSignIn, TokenSource, type Auth } from './auth.ts';
 import { isAuthError, TodoistBackend } from './api/todoist.ts';
 import type { Backend, Due, Label, MoveTarget, Project, Section, SyncDueDate, Task, User } from './api/types.ts';
-import { apiPriority } from './lib/colors.ts';
+import { apiPriority, todoistColor } from './lib/colors.ts';
 import { dayLabel, dueAtTime, moveDueDate, safeTz, todayIn } from './lib/dates.ts';
 import { buildOrder, countPending, isPending, nextAfter, prevBefore, QUEUES, reasonsFor, type QueueContext, type QueueId, type Reason } from './lib/queue.ts';
 
@@ -137,6 +137,49 @@ export const counts = computed(() => {
 });
 export const projectById = computed(() => new Map(projects.value.map((p) => [p.id, p])));
 export const sectionById = computed(() => new Map(sections.value.map((s) => [s.id, s])));
+
+/** Somewhere a task can be moved: a project, or a section in one. */
+export interface Destination {
+  projectId: string;
+  sectionId: string | null;
+  name: string;
+  /** With its parent projects, e.g. "Work / Q4 Launch / Meetings". */
+  path: string;
+  color: string;
+  depth: number;
+}
+
+const parentOf = (p: Project) => ('parentId' in p ? p.parentId : null);
+
+/** Every project with its sections, nested, Inbox first and then in Todoist's order. Listed by the Move sheet and the drag-to-move list. */
+export const destinations = computed(() => {
+  const byParent = new Map<string | null, Project[]>();
+  for (const p of projects.value) {
+    const key = parentOf(p);
+    byParent.set(key, [...(byParent.get(key) ?? []), p]);
+  }
+  const out: Destination[] = [];
+  const walk = (parent: string | null, depth: number, trail: string) => {
+    const kids = (byParent.get(parent) ?? []).sort((a, b) => {
+      const ia = 'inboxProject' in a && a.inboxProject ? -1 : 0;
+      const ib = 'inboxProject' in b && b.inboxProject ? -1 : 0;
+      return ia - ib || a.childOrder - b.childOrder;
+    });
+    for (const p of kids) {
+      const path = trail ? `${trail} / ${p.name}` : p.name;
+      out.push({ projectId: p.id, sectionId: null, name: p.name, path, color: todoistColor(p.color), depth });
+      for (const s of sections.value.filter((s) => s.projectId === p.id)) {
+        out.push({ projectId: p.id, sectionId: s.id, name: s.name, path: `${path} / ${s.name}`, color: todoistColor(p.color), depth: depth + 1 });
+      }
+      walk(p.id, depth + 1, path);
+    }
+  };
+  walk(null, 0, '');
+  // Projects whose parent we don't know (e.g. archived parent) still need to be reachable.
+  const seen = new Set(out.map((r) => r.projectId));
+  for (const p of projects.value) if (!seen.has(p.id)) out.push({ projectId: p.id, sectionId: null, name: p.name, path: p.name, color: todoistColor(p.color), depth: 0 });
+  return out;
+});
 
 export function childrenOf(id: string, map = tasks.value): Task[] {
   const out: Task[] = [];

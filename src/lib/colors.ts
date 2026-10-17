@@ -27,3 +27,6 @@ export const todoistColor = (name: string | undefined) => (name && COLORS[name])
 /** UI priority (P1 = most urgent) from API priority (4 = most urgent). */
 export const uiPriority = (api: number) => 5 - api;
 export const apiPriority = (ui: number) => (5 - ui) as 1 | 2 | 3 | 4;
+
+/** CSS colour for each UI priority, indexed by P1–P4. */
+export const PRIORITY_COLOR = ['', 'var(--p1)', 'var(--p2)', 'var(--p3)', 'var(--muted)'];

@@ -89,7 +89,7 @@ In the pickers, `↑`/`↓` and `↵` choose, `Esc` closes, and typing filters. 
 | Long swipe left   | Move to project…   |
 | Swipe up          | Skip               |
 
-The bottom bar has **Skip, Move, Schedule, Done** and **More**. Schedule opens the date sheet, which has Today, Tomorrow, Weekend and Next week at the top. More holds priority, labels, edit, delete and undo.
+The bottom bar has **Move, Labels, Schedule, Priority** and **More**. Tap any of the first four for its sheet, or press it and drag up to pick without lifting your finger (see below). The date sheet has Today, Tomorrow, Weekend and Next week at the top. More holds skip, edit, open in Todoist, delete and undo. Done and skip are on the card itself: swipe it, or tick its circle to complete it.
 
 ### Drag to schedule
 
@@ -102,6 +102,16 @@ The big **Schedule** button in the middle does two things. Tap it for the date s
 - **Drag back down to the button** to cancel. Times that have already passed today can't be picked.
 
 The task keeps its recurrence, and its fixed timezone if it has one. Durations aren't set: the calendar draws the task as 30 minutes, and Todoist keeps its own default.
+
+### Drag to move, label or set priority
+
+**Move**, **Labels** and **Priority** work the same way. Tap for the sheet. Or press and drag up: the projects, labels or priorities open as a list above your thumb, and letting go on one applies it. The big text at the top says what letting go will do.
+
+- **Move** lists every project and its sections. The one the task is in is marked *current*.
+- **Labels** adds the label you let go on, or removes it if the task already has it. That's one label per drag; tap Labels to change several at once or to create one.
+- **Priority** lists P1 to P4. The flag on the button shows the task's current priority.
+- **Hold near the top or bottom** of a long list to scroll it.
+- **Drag back down to the bar** to cancel.
 
 ## Safety nets
 
@@ -137,3 +147,5 @@ Code map:
 - `src/shortcuts.ts`: the keyboard map, which drives both the handler and the help sheet
 - `src/components/TaskCard.tsx`: the card and its swipe gestures
 - `src/components/ScheduleDrag.tsx`: the Schedule button and the drag-to-schedule calendar
+- `src/components/DragPick.tsx`: the Move, Labels and Priority buttons and their drag-to-pick list
+- `src/components/press.ts`: the tap-or-drag-up gesture those buttons share

@@ -15,6 +15,7 @@
   --schedule: #4c63d9;
   --schedule-soft: #e7eafc;
   --move: #8a4fd8;
+  --label: #0e8780;
   --skip: #6b7280;
   --p1: #d1453b;
   --p2: #e98a0c;
@@ -23,6 +24,8 @@
   --today: #23935a;
   --future: #7a5bd1;
   --radius: 18px;
+  /* How much darker a highlighted drag-pick row is than its tone, so white text on it stays readable. */
+  --tone-shade: 0%;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, Roboto, system-ui, sans-serif;
   color-scheme: light;
 }
@@ -45,6 +48,7 @@
     --schedule: #7d8ff0;
     --schedule-soft: #23284a;
     --move: #b085f2;
+    --label: #2aa69c;
     --skip: #9ca3af;
     --p1: #ff6a5a;
     --p2: #f5a443;
@@ -52,6 +56,7 @@
     --overdue: #ff6a5a;
     --today: #3cbf78;
     --future: #a48cf0;
+    --tone-shade: 24%;
     color-scheme: dark;
   }
 }
@@ -1362,8 +1367,22 @@ kbd {
   background: var(--surface-2);
 }
 
-.bar-btn.done {
-  color: var(--done);
+/* Move, Labels and Priority: tap for the sheet, press and drag up to pick from a list. */
+.drag-btn {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.drag-btn.p1 .icon {
+  color: var(--p1);
+}
+.drag-btn.p2 .icon {
+  color: var(--p2);
+}
+.drag-btn.p3 .icon {
+  color: var(--p3);
 }
 
 /* The middle button: tap for the date sheet, press and drag up to drop the task on the calendar. */
@@ -1474,7 +1493,7 @@ kbd {
   font-weight: 750;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--schedule);
+  color: var(--tone, var(--schedule));
   min-height: 34px;
 }
 
@@ -1822,6 +1841,157 @@ kbd {
 .sd-cancel.on .sd-cancel-ring {
   border: 2px solid var(--text);
   background: var(--surface);
+}
+
+/* ------------------------------------------------------------------ drag-to-pick lists (Move, Labels, Priority) */
+
+/* Built on the calendar's frame, header and cancel zone (.sd, .sd-head, .sd-body, .sd-cancel). --tone is set inline. */
+.dp .sd-head {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Long names stay on one line, so nothing under the finger shifts. */
+.dp .sd-readout {
+  font-size: 23px;
+}
+
+.dp .sd-readout span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dp .sd-body:not(.more-up)::before,
+.dp .sd-body:not(.more-down)::after {
+  opacity: 0;
+}
+
+.dp-box {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A short list sits at the bottom, close to the thumb. */
+.dp-list {
+  flex: none;
+  list-style: none;
+  margin: auto 0 0;
+  padding: 10px 12px;
+}
+
+.dp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 0 14px 0 calc(16px + var(--indent) * 20px);
+  border-radius: 14px;
+  font-size: 16.5px;
+  font-weight: 600;
+  transition: background-color 0.1s, color 0.1s, transform 0.1s;
+}
+
+.dp-row .icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.dp-row .dot {
+  width: 11px;
+  height: 11px;
+  /* As wide as a section's icon, so names at the same depth line up. */
+  margin: 0 3px;
+  background: var(--c);
+}
+
+.dp-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dp .tick.on {
+  background: var(--tone);
+  border-color: var(--tone);
+}
+
+.dp-row.aimed {
+  background: color-mix(in srgb, var(--tone), black var(--tone-shade));
+  color: #fff;
+  transform: scale(1.02);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--tone) 40%, transparent);
+}
+
+.dp-row.aimed .icon {
+  color: #fff;
+}
+
+.dp-row.aimed .dot {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.dp-row.aimed .tick {
+  border-color: #fff;
+}
+
+.dp-row.aimed .tick.on {
+  background: #fff;
+}
+
+.dp-row.aimed .tick.on .icon {
+  color: var(--tone) !important;
+}
+
+.dp-row.aimed .pill {
+  background: rgb(255 255 255 / 0.22);
+  color: #fff;
+}
+
+/* Where the task already is: letting go changes nothing. */
+.dp-row.aimed.noop {
+  background: var(--surface-2);
+  color: var(--muted);
+  transform: none;
+  box-shadow: none;
+}
+
+.dp-row.aimed.noop .icon {
+  color: var(--c, var(--muted));
+}
+
+.dp-row.aimed.noop .pill {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.dp-row.landed {
+  animation: sd-land 0.36s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.dp-priority .dp-row {
+  min-height: 64px;
+  font-size: 18px;
+}
+
+.dp-priority .dp-row .icon {
+  color: var(--c);
+}
+
+.dp-priority .dp-row.aimed:not(.noop) .icon {
+  color: #fff;
+}
+
+.dp-empty {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
 }
 
 /* ------------------------------------------------------------------ sheets */
@@ -2241,15 +2411,6 @@ kbd {
   border-color: currentColor;
 }
 
-.more-section {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--faint);
-  padding: 6px 10px 4px;
-}
-
 .more-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2330,6 +2491,12 @@ kbd {
 }
 .swatch.move {
   background: var(--move);
+}
+.swatch.label {
+  background: var(--label);
+}
+.swatch.priority {
+  background: linear-gradient(135deg, var(--p1), var(--p2), var(--p3));
 }
 .swatch.skip {
   background: var(--skip);

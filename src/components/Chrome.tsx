@@ -37,6 +37,7 @@ import {
   user,
   type Sheet,
 } from '../store.ts';
+import { PickButton } from './DragPick.tsx';
 import { Icon, type IconName } from './icons.tsx';
 import { ScheduleButton } from './ScheduleDrag.tsx';
 
@@ -167,24 +168,23 @@ export function ActionPanel() {
   );
 }
 
-/** Phone action bar: big thumb targets, with Schedule in the middle (tap for the sheet, drag up for the calendar). */
+/**
+ * Phone action bar: big thumb targets. Move, Labels, Schedule (the big one in the middle) and Priority open their sheet
+ * on a tap, or can be pressed and dragged up to pick without lifting the finger.
+ */
 export function MobileBar() {
-  const task = current.value;
-  const off = !task;
-  const big = (icon: IconName, label: string, onClick: () => void, tone?: string) => (
-    <button class={`bar-btn ${tone ?? ''}`} disabled={off && tone !== 'menu'} onClick={onClick}>
-      <Icon name={icon} size={22} />
-      <span>{label}</span>
-    </button>
-  );
+  const off = !current.value;
   return (
     <div class="mobile-bar">
       <div class="bar-row">
-        {big('skip', 'Skip', skip)}
-        {big('move', 'Move', openSheet('move'))}
+        <PickButton kind="move" disabled={off} />
+        <PickButton kind="labels" disabled={off} />
         <ScheduleButton disabled={off} />
-        {big('check', 'Done', () => complete(), 'done')}
-        {big('more', 'More', openSheet('more'), 'menu')}
+        <PickButton kind="priority" disabled={off} />
+        <button class="bar-btn" onClick={openSheet('more')}>
+          <Icon name="more" size={22} />
+          <span>More</span>
+        </button>
       </div>
     </div>
   );
