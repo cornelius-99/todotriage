@@ -1,8 +1,8 @@
 import { batch, signal } from '@preact/signals';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Task } from '../api/types.ts';
 import { PRIORITY_COLOR, todoistColor, uiPriority } from '../lib/colors.ts';
-import { current, destinations, labels, moveTo, setLabels, setPriority, sheet } from '../store.ts';
+import { current, type Destination, destinations, labels, moveTo, setLabels, setPriority, sheet } from '../store.ts';
 import { Icon, type IconName } from './icons.tsx';
 import { finger, usePressDrag } from './press.ts';
 
@@ -48,11 +48,22 @@ const stage = signal<'closed' | 'open' | 'landing' | 'closing'>('closed');
 const landed = signal<string | null>(null);
 let pointing: Pointing = 'cancel';
 
+/** The top-level projects in reverse, each keeping its sections and subprojects under it in order, so the first ones
+ * (Inbox, then usually the most used) sit at the bottom, nearest the finger coming up from the bar. */
+function bottomUp(list: Destination[]): Destination[] {
+  const blocks: Destination[][] = [];
+  for (const d of list) {
+    if (d.depth === 0 || !blocks.length) blocks.push([d]);
+    else blocks[blocks.length - 1].push(d);
+  }
+  return blocks.reverse().flat();
+}
+
 /** What the list offers for the task. Built again on release, so it acts on the task as it is then. */
 function choicesFor(k: PickKind, task: Task): Choice[] {
   const id = task.id;
   if (k === 'move') {
-    return destinations.value.map((d) => {
+    return bottomUp(destinations.value).map((d) => {
       const here = task.projectId === d.projectId && (task.sectionId ?? null) === d.sectionId;
       // A subtask in its parent's project still moves out from under the parent.
       const noop = here && !task.parentId;
@@ -145,6 +156,12 @@ function Overlay() {
   const [edge, setEdge] = useState<'up' | 'down' | null>(null);
   // Which ends of a long list have more past them, for the fades.
   const [more, setMore] = useState('');
+
+  // The move list is bottom-up, so a long one opens scrolled to its end.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (box && k === 'move') box.scrollTop = box.scrollHeight;
+  }, []);
 
   useEffect(() => {
     let raf = 0;
