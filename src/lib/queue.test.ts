@@ -7,7 +7,7 @@ const task = (id: string, extra: Partial<Task> = {}): Task =>
 const due = (date: string) => ({ date, string: date, isRecurring: false });
 
 function ctx(tasks: Task[], extra: Partial<QueueContext> = {}): QueueContext {
-  return { today: '2026-10-16', tz: 'UTC', inboxId: 'inbox', tasks: new Map(tasks.map((t) => [t.id, t])), gone: new Set(), dateAck: new Set(), ...extra };
+  return { today: '2026-10-16', tz: 'UTC', inboxId: 'inbox', tasks: new Map(tasks.map((t) => [t.id, t])), gone: new Set(), dateAck: new Set(), dated: new Set(), leftInbox: new Set(), ...extra };
 }
 
 describe('queue membership', () => {
@@ -38,6 +38,28 @@ describe('queue membership', () => {
     const c = ctx(tasks, { dateAck: new Set(['inLate', 'now']) });
     expect(reasonsFor(tasks[6], 'all', c)).toEqual(['inbox']);
     expect(isPending('now', 'all', c)).toBe(false);
+  });
+
+  it('keeps an Inbox task until it is both moved out and dated, in either order', () => {
+    const moved = task('in0', { projectId: 'work' });
+    const datedInInbox = task('in1', { projectId: 'inbox', due: due('2026-10-20') });
+    // Moved but no date yet: still waiting.
+    expect(reasonsFor(moved, 'all', ctx([moved], { leftInbox: new Set(['in0']) }))).toEqual(['inbox']);
+    // Dated but still in the Inbox: still waiting.
+    expect(reasonsFor(datedInInbox, 'all', ctx([datedInInbox], { dated: new Set(['in1']), dateAck: new Set(['in1']) }))).toEqual(['inbox']);
+    // Both: done.
+    expect(isPending('in0', 'all', ctx([moved], { leftInbox: new Set(['in0']), dated: new Set(['in0']) }))).toBe(false);
+    expect(isPending('in0', 'inbox', ctx([moved], { leftInbox: new Set(['in0']), dated: new Set(['in0']) }))).toBe(false);
+  });
+
+  it('does not count "No date" as dating an Inbox task', () => {
+    const moved = task('in0', { projectId: 'work' });
+    expect(isPending('in0', 'inbox', ctx([moved], { leftInbox: new Set(['in0']), dateAck: new Set(['in0']) }))).toBe(true);
+  });
+
+  it('lets a task already in a project finish with a date alone', () => {
+    const c = ctx(tasks, { dateAck: new Set(['old']), dated: new Set(['old']) });
+    expect(isPending('old', 'all', c)).toBe(false);
   });
 
   it('drops tasks that are gone', () => {

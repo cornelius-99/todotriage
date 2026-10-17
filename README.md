@@ -46,8 +46,10 @@ Sign-in needs a secure context (HTTPS or localhost) for WebCrypto. On a LAN addr
 | ------- | ----------------------------------------------- | -------------------------------------------------- |
 | Overdue | Todoist filter `overdue`                         | you complete, delete or pick any date for it       |
 | Today   | Todoist filter `today` (not overdue)             | you complete, delete or pick any date for it       |
-| Inbox   | Every task in your Inbox project                 | you complete, delete or move it out of the Inbox   |
+| Inbox   | Every task in your Inbox project                 | you complete or delete it, or both move it to a project and pick a date for it (in either order) |
 | All     | All of the above, in that order                  | none of its reasons apply anymore                  |
+
+An Inbox card you've moved but not dated yet stays put with a **Needs a date** badge, and the same goes for a card you've dated but not moved. Choosing "No date" doesn't count as picking a date.
 
 **Skip** keeps a task as it is and moves on. At the end of the queue you can go through the skipped ones again. Changing priority, labels or the title keeps the card in focus, so you can stack decisions on one task: for example, set P2, add `@waiting`, then move it to a project.
 

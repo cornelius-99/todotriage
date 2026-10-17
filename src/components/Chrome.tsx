@@ -8,11 +8,9 @@ import {
   counts,
   current,
   currentId,
-  dateAck,
+  ctx,
   dismissToast,
-  gone,
   goTo,
-  inboxId,
   isDemo,
   kept,
   list,
@@ -32,7 +30,6 @@ import {
   tasks,
   toasts,
   today,
-  tz,
   undo,
   user,
   type Sheet,
@@ -235,7 +232,7 @@ export function QueueList() {
 function reasonGroup(id: string): string {
   const t = tasks.value.get(id);
   if (!t) return '';
-  return reasonsFor(t, 'all', { today: today.value, tz: tz.value, inboxId: inboxId.value, tasks: tasks.value, gone: gone.value, dateAck: dateAck.value })[0] ?? '';
+  return reasonsFor(t, 'all', ctx.value)[0] ?? '';
 }
 
 export function EmptyState() {

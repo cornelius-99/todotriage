@@ -20,13 +20,18 @@ export interface QueueContext {
   gone: Set<string>;
   /** Tasks whose date the user explicitly decided on this session. */
   dateAck: Set<string>;
+  /** Tasks given an actual date this session ("No date" doesn't count). */
+  dated: Set<string>;
+  /** Tasks moved out of the Inbox this session. */
+  leftInbox: Set<string>;
 }
 
 const includes = (queue: QueueId, r: Reason) => queue === 'all' || queue === r;
 
 /**
  * Why a task still needs triage in `queue`. A task leaves the queue once this is empty:
- * date reasons are settled by any explicit date decision, the inbox reason by moving it out.
+ * date reasons are settled by any explicit date decision, the inbox reason only once the task
+ * has both been moved out of the Inbox and been given a date, in either order.
  */
 export function reasonsFor(task: Task, queue: QueueId, ctx: QueueContext): Reason[] {
   if (ctx.gone.has(task.id)) return [];
@@ -36,7 +41,8 @@ export function reasonsFor(task: Task, queue: QueueId, ctx: QueueContext): Reaso
     if (s === 'overdue' && includes(queue, 'overdue')) out.push('overdue');
     if (s === 'today' && includes(queue, 'today')) out.push('today');
   }
-  if (task.projectId === ctx.inboxId && includes(queue, 'inbox')) out.push('inbox');
+  const inInbox = task.projectId === ctx.inboxId || (ctx.leftInbox.has(task.id) && !ctx.dated.has(task.id));
+  if (inInbox && includes(queue, 'inbox')) out.push('inbox');
   return out;
 }
 
