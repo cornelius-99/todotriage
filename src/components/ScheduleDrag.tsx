@@ -5,7 +5,7 @@ import { todoistColor } from '../lib/colors.ts';
 import { addDays, clockTime, dayLabel, diffDays, dueDay, dueTime, minutesNow, shortDate, WEEKDAY, weekday } from '../lib/dates.ts';
 import { current, gone, projectById, scheduleAt, scheduleDay, sheet, tasks, today, tz, upcoming } from '../store.ts';
 import { Icon } from './icons.tsx';
-import { finger, usePressDrag } from './press.ts';
+import { edgeSpeed, edgeZone, finger, usePressDrag, useSecondFinger } from './press.ts';
 
 // Press the Schedule button and drag up: a few days of calendar open under the finger, and
 // letting go over a slot schedules the task right then. Over a day's header it gets the day
@@ -28,10 +28,10 @@ const VISIBLE_HOURS = 12;
 const GUTTER = 46;
 /** Slots are picked a little above the fingertip so it doesn't hide them. */
 const AIM_ABOVE = 28;
-/** Height of the zones at the top and bottom of the grid that scroll it. */
-const EDGE = 44;
 /** How long to hold at a side edge to page by a day. */
 const DWELL = 550;
+/** How far a second finger slides sideways to page by a day. */
+const SWIPE_DAY = 70;
 /** How long to stay in a top or bottom zone before it scrolls, so passing through doesn't. */
 const SCROLL_DELAY = 180;
 const LAND_MS = 420;
@@ -187,11 +187,12 @@ function Overlay() {
       const r = grid.getBoundingClientRect();
       const { x, y } = finger;
       const aimY = y - AIM_ABOVE;
+      const zone = edgeZone(r.height);
 
-      if (y < r.bottom - EDGE * 1.5) armed = true;
+      if (y < r.bottom - zone * 1.5) armed = true;
       let v = 0;
-      if (aimY >= r.top && aimY < r.top + EDGE) v = -(1 + 4.5 * ((r.top + EDGE - aimY) / EDGE) ** 2);
-      else if (armed && y > r.bottom - EDGE && y <= r.bottom) v = 1 + 4.5 * ((y - (r.bottom - EDGE)) / EDGE) ** 2;
+      if (aimY >= r.top && aimY < r.top + zone) v = -edgeSpeed((r.top + zone - aimY) / zone);
+      else if (armed && y > r.bottom - zone && y <= r.bottom) v = edgeSpeed((y - (r.bottom - zone)) / zone);
       const dir = Math.sign(v) as -1 | 0 | 1;
       if (!dir) inZone = null;
       else if (inZone?.dir !== dir) inZone = { dir, since: t };
@@ -220,6 +221,18 @@ function Overlay() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  // A second finger drags the hours up and down, and sideways pages the days.
+  const swipe = useRef(0);
+  const twoFinger = useSecondFinger((dx, dy) => {
+    if (gridRef.current) gridRef.current.scrollTop -= dy;
+    if (Math.abs(dx) > Math.abs(dy)) swipe.current += dx;
+    if (Math.abs(swipe.current) < SWIPE_DAY) return;
+    const next = Math.max(0, live.current.offset + (swipe.current < 0 ? 1 : -1));
+    swipe.current = 0;
+    live.current.offset = next;
+    setOffset(next);
+  });
+
   const all = new Map<string, Task>();
   for (const t of upcoming.value) all.set(t.id, t);
   for (const t of tasks.value.values()) all.set(t.id, t);
@@ -238,7 +251,7 @@ function Overlay() {
   else readout = 'Let go here to cancel';
 
   return (
-    <div class={`sd ${s}`} role="dialog" aria-label="Pick a time">
+    <div class={`sd ${s}`} role="dialog" aria-label="Pick a time" {...twoFinger}>
       <div class="sd-head">
         <div class="sd-task">
           <Icon name="calendarClock" size={15} />
