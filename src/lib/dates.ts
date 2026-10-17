@@ -82,7 +82,7 @@ export function dueTime(due: Due, tz: string): string | null {
 }
 
 /** Convert a wall-clock time in `tz` to a UTC instant. */
-function zonedToUtc(day: string, time: string, tz: string): Date {
+export function zonedToUtc(day: string, time: string, tz: string): Date {
   const [y, mo, d] = day.split('-').map(Number);
   const [h, mi, s = 0] = time.split(':').map(Number);
   const wall = Date.UTC(y, mo - 1, d, h, mi, s);

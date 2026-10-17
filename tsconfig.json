@@ -15,7 +15,7 @@
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "gapi", "gapi.client", "google.accounts"]
   },
   "include": ["src"]
 }
