@@ -31,7 +31,7 @@ function storageSet(key: string, value: string | null) {
 // ---------------------------------------------------------------------------
 // State
 
-export type Sheet = 'schedule' | 'move' | 'labels' | 'edit' | 'help' | 'more' | 'priority';
+export type Sheet = 'schedule' | 'move' | 'labels' | 'edit' | 'help' | 'more' | 'priority' | 'settings';
 export type ExitDir = 'right' | 'left' | 'up' | 'down' | 'fade';
 /** What gets stamped on a card as it leaves the queue. */
 export interface Stamp {

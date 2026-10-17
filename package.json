@@ -17,7 +17,10 @@
     "preact": "^11.0.1"
   },
   "devDependencies": {
+    "@maxim_mazurok/gapi.client.calendar-v3": "^0.2.20261012",
     "@preact/preset-vite": "^2.10.6",
+    "@types/gapi": "^0.0.47",
+    "@types/google.accounts": "^0.0.18",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"

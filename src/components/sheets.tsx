@@ -25,6 +25,7 @@ import {
   undo,
   user,
 } from '../store.ts';
+import { calendarError, calendarLoading, calendars, canUseGoogle, connectGoogle, disconnectGoogle, googleEmail, googleReady, googleState, isShown, loadGoogle, setShown } from '../google.ts';
 import { Calendar } from './Calendar.tsx';
 import { Icon, type IconName } from './icons.tsx';
 import { hasFinePointer, PickList, Sheet, type PickItem } from './Sheet.tsx';
@@ -278,6 +279,84 @@ function MoreSheet() {
   );
 }
 
+function SettingsSheet() {
+  const state = googleState.value;
+  const u = user.value;
+  // Google's sign-in popup has to open right in the tap, so have its library ready before then.
+  useEffect(() => void (canUseGoogle && loadGoogle()), []);
+  return (
+    <Sheet title="Settings" onClose={close}>
+      <section class="settings-group">
+        <h4>Google Calendar</h4>
+        {state === 'off' && (
+          <>
+            <p class="muted">Show your events in the schedule view while you drag a task onto a time. Read-only: the app can't change your calendar.</p>
+            {canUseGoogle ? (
+              <button class="btn primary" onClick={googleReady.value ? connectGoogle : () => ((calendarError.value = ''), void loadGoogle())} disabled={!googleReady.value && !calendarError.value}>
+                <Icon name="calendar" size={16} /> {googleReady.value || calendarError.value ? 'Connect Google Calendar' : 'Loading Google…'}
+              </button>
+            ) : (
+              <p class="settings-error">Google sign-in only works on an https address or localhost. Open the hosted app to connect.</p>
+            )}
+          </>
+        )}
+        {state === 'expired' && (
+          <>
+            <p class="muted">The Google sign-in has run out. Reconnect to see your events again.</p>
+            <div class="settings-actions">
+              <button class="btn primary" onClick={googleReady.value ? connectGoogle : () => ((calendarError.value = ''), void loadGoogle())} disabled={!googleReady.value && !calendarError.value}>
+                <Icon name="refresh" size={16} /> {googleReady.value || calendarError.value ? 'Reconnect' : 'Loading Google…'}
+              </button>
+              <button class="btn" onClick={disconnectGoogle}>
+                Disconnect
+              </button>
+            </div>
+          </>
+        )}
+        {state === 'on' && (
+          <>
+            {googleEmail.value && <p class="muted">Connected as {googleEmail.value}</p>}
+            {calendars.value.length === 0 && calendarLoading.value && <p class="muted">Loading calendars…</p>}
+            <ul class="cal-list">
+              {calendars.value.map((c) => {
+                const on = isShown(c);
+                return (
+                  <li key={c.id}>
+                    <button class="cal-row" role="switch" aria-checked={on} onClick={() => setShown(c, !on)}>
+                      <span class={`cal-check ${on ? 'on' : ''}`} style={{ '--c': c.color }}>
+                        {on && <Icon name="check" size={13} />}
+                      </span>
+                      <span class="cal-name">{c.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div class="settings-actions">
+              <button class="btn" onClick={disconnectGoogle}>
+                <Icon name="logout" size={16} /> Disconnect
+              </button>
+            </div>
+          </>
+        )}
+        {calendarError.value && <p class="settings-error">{calendarError.value}</p>}
+      </section>
+      <section class="settings-group">
+        <h4>Todoist</h4>
+        {u && !isDemo.value && <p class="muted">Signed in as {u.fullName || u.email}</p>}
+        <div class="settings-actions">
+          <button class="btn" onClick={() => (sheet.value = 'help')}>
+            <Icon name="keyboard" size={16} /> Shortcuts & gestures
+          </button>
+          <button class="btn" onClick={() => signOut()}>
+            <Icon name="logout" size={16} /> {isDemo.value ? 'Leave demo' : 'Sign out'}
+          </button>
+        </div>
+      </section>
+    </Sheet>
+  );
+}
+
 function HelpSheet() {
   const groups = ['Triage', 'Dates', 'Organize', 'Navigate'] as const;
   return (
@@ -347,6 +426,8 @@ export function Sheets() {
       return <MoreSheet key={key} />;
     case 'help':
       return <HelpSheet key={key} />;
+    case 'settings':
+      return <SettingsSheet key={key} />;
     default:
       return null;
   }

@@ -34,6 +34,18 @@ Sign-in needs a secure context (HTTPS or localhost) for WebCrypto. On a LAN addr
 
 **Hosting it elsewhere or forking:** change the URLs in `public/oauth-client.json`. `client_id` must be the file's own public URL, and `redirect_uris` must list your site. Then build with `VITE_TODOIST_CLIENT_ID=<that URL>`.
 
+### Google Calendar (optional)
+
+Settings (the gear, top right) can connect a Google account read-only, so the drag-to-schedule calendar shows your events next to your tasks. Each calendar can be switched on or off there, and events keep their Google Calendar colours.
+
+It uses Google's own browser libraries, loaded from Google when needed: **Identity Services** (`accounts.google.com/gsi/client`) signs in with a popup and hands out an access token for `calendar.readonly`, and the **API client** (`apis.google.com/js/api.js`) makes the Calendar calls. Google gives browser apps one-hour tokens and no refresh token, so after an hour Settings shows **Reconnect**, one tap with no consent screen.
+
+The OAuth client (`VITE_GOOGLE_CLIENT_ID`, defaulting to this project's) is a **Web application** client in Google Cloud with:
+
+- the **Google Calendar API** enabled for the project
+- **Authorized JavaScript origins**: `https://cornelius-99.github.io` and `http://localhost:5173`
+- while the consent screen is in Testing, your Google account added as a test user
+
 ### On your iPhone
 
 1. Host the app somewhere (see [Deploying](#deploying)), or for a quick test on your Wi-Fi, run `npm run dev:lan` and open the "Network" URL on the phone.
@@ -141,6 +153,7 @@ npm run icons   # redraw the app icon: icon.svg plus every PNG size
 Code map:
 
 - `src/auth.ts`: OAuth sign-in (PKCE), token storage and refresh
+- `src/google.ts`: read-only Google Calendar sign-in and fetching through Google's JS libraries; `src/lib/gcal.ts` turns its data into what the calendar draws
 - `src/api/todoist.ts`: the SDK wrapper (loading, the next week's tasks for the calendar, close/reopen/delete/update/move, Sync-based rescheduling, refresh-and-retry on 401)
 - `src/api/demo.ts`: the in-memory backend behind demo mode
 - `src/store.ts`: app state (signals), optimistic actions, undo, delayed deletes

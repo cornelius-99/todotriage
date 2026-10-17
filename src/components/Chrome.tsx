@@ -67,8 +67,8 @@ export function Header() {
         <button class="icon-btn desktop-only" onClick={() => (sheet.value = 'help')} title="Shortcuts (?)" aria-label="Keyboard shortcuts">
           <Icon name="keyboard" />
         </button>
-        <button class="icon-btn" onClick={() => (sheet.value = 'more')} title="Menu" aria-label="Menu">
-          <Icon name="more" />
+        <button class="icon-btn" onClick={() => (sheet.value = 'settings')} title="Settings" aria-label="Settings">
+          <Icon name="settings" />
         </button>
       </div>
     </header>

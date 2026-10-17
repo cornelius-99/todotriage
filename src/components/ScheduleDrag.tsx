@@ -1,8 +1,10 @@
 import { batch, signal } from '@preact/signals';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Task } from '../api/types.ts';
+import { loadCalendar, shownEvents } from '../google.ts';
 import { todoistColor } from '../lib/colors.ts';
 import { addDays, clockTime, dayLabel, diffDays, dueDay, dueTime, minutesNow, shortDate, WEEKDAY, weekday } from '../lib/dates.ts';
+import { eventsOn, textOn, type EventSlice, type GEvent } from '../lib/gcal.ts';
 import { current, gone, projectById, scheduleAt, scheduleDay, sheet, tasks, today, tz, upcoming } from '../store.ts';
 import { Icon } from './icons.tsx';
 import { edgeSpeed, edgeZone, finger, usePressDrag, useSecondFinger } from './press.ts';
@@ -82,16 +84,19 @@ export function ScheduleOverlay() {
   return stage.value === 'closed' ? null : <Overlay />;
 }
 
+/** A task or a Google Calendar event drawn in a day's column. */
 interface Block {
-  task: Task;
+  key: string;
+  task?: Task;
+  event?: GEvent;
   start: number;
   length: number;
   lane: number;
   lanes: number;
 }
 
-/** Timed tasks laid out side by side where they overlap; untimed ones are only counted. */
-function dayPlan(all: Task[], day: string, zone: string) {
+/** Timed tasks and events laid out side by side where they overlap; untimed tasks are only counted. */
+function dayPlan(all: Task[], day: string, zone: string, slices: EventSlice[]) {
   const timed: Omit<Block, 'lane' | 'lanes'>[] = [];
   let untimed = 0;
   for (const task of all) {
@@ -103,8 +108,9 @@ function dayPlan(all: Task[], day: string, zone: string) {
     }
     const [h, m] = time.split(':').map(Number);
     const length = task.duration?.unit === 'minute' ? task.duration.amount : DEFAULT_MINUTES;
-    timed.push({ task, start: h * 60 + m, length });
+    timed.push({ key: task.id, task, start: h * 60 + m, length });
   }
+  for (const e of slices) timed.push({ key: e.event.id, event: e.event, start: e.start, length: e.length });
   timed.sort((a, b) => a.start - b.start || b.length - a.length);
   const blocks: Block[] = [];
   let group: Block[] = [];
@@ -153,6 +159,9 @@ function Overlay() {
     setHourPx(px);
     grid.scrollTop = START_HOUR * px - 10;
   }, []);
+
+  // Events come from the last load; fetch fresh ones in the background if those are getting old.
+  useEffect(() => void loadCalendar(), []);
 
   useEffect(() => {
     let raf = 0;
@@ -238,7 +247,12 @@ function Overlay() {
   for (const t of tasks.value.values()) all.set(t.id, t);
   for (const id of gone.value) all.delete(id);
   if (task) all.delete(task.id);
-  const plans = days.map((d) => dayPlan([...all.values()], d, zone));
+  const evs = shownEvents.value;
+  const plans = days.map((d) => {
+    const { timed, allDay } = eventsOn(evs, d, zone);
+    return { ...dayPlan([...all.values()], d, zone, timed), allDay };
+  });
+  const anyAllDay = plans.some((p) => p.allDay.length > 0);
 
   const s = stage.value;
   const shown = s === 'landing' || s === 'closing' ? landed.value : typeof aim === 'object' ? aim : null;
@@ -272,13 +286,23 @@ function Overlay() {
           )}
         </div>
         {days.map((d, i) => {
-          const { untimed } = plans[i];
+          const { untimed, allDay } = plans[i];
           const on = shown?.day === d && shown.minutes === null;
           return (
             <div key={d} class={`sd-day ${d === day0 ? 'today' : ''} ${shown?.day === d ? 'aimed' : ''} ${on ? 'allday' : ''}`}>
               <span class="sd-dow">{d === day0 ? 'Today' : WEEKDAY[weekday(d) - 1]}</span>
               <span class="sd-num">{Number(d.slice(8))}</span>
               <span class="sd-untimed">{on ? 'no time' : untimed ? `${untimed} task${untimed > 1 ? 's' : ''}` : ''}</span>
+              {anyAllDay && (
+                <span class="sd-allday">
+                  {allDay.slice(0, allDay.length > 2 ? 1 : 2).map((e) => (
+                    <span key={e.id} class="sd-chip" style={{ '--c': e.color, '--fg': textOn(e.color) }}>
+                      {e.title}
+                    </span>
+                  ))}
+                  {allDay.length > 2 && <span class="sd-chip more">+{allDay.length - 1}</span>}
+                </span>
+              )}
             </div>
           );
         })}
@@ -303,20 +327,28 @@ function Overlay() {
                 <div key={d} class={`sd-col ${shown?.day === d && shown.minutes !== null ? 'aimed' : ''}`}>
                   {d === day0 && <div class="sd-past" style={{ height: `${y(now)}px` }} />}
                   {blocks.map((b) => {
-                    const project = projectById.value.get(b.task.projectId);
+                    const box = {
+                      top: `${y(b.start)}px`,
+                      height: `${Math.max(16, y(b.length) - 2)}px`,
+                      left: `${(b.lane / b.lanes) * 100}%`,
+                      width: `${100 / b.lanes}%`,
+                    };
+                    if (b.event) {
+                      return (
+                        <div key={b.key} class={`sd-event gcal ${b.length < 45 ? 'short' : ''}`} style={{ ...box, '--c': b.event.color, '--fg': textOn(b.event.color) }}>
+                          <span>{b.event.title}</span>
+                        </div>
+                      );
+                    }
+                    const task = b.task!;
+                    const project = projectById.value.get(task.projectId);
                     return (
                       <div
-                        key={b.task.id}
+                        key={b.key}
                         class={`sd-event ${b.length < 45 ? 'short' : ''}`}
-                        style={{
-                          top: `${y(b.start)}px`,
-                          height: `${Math.max(16, y(b.length) - 2)}px`,
-                          left: `${(b.lane / b.lanes) * 100}%`,
-                          width: `${100 / b.lanes}%`,
-                          '--c': todoistColor(project?.color ?? 'charcoal'),
-                        }}
+                        style={{ ...box, '--c': todoistColor(project?.color ?? 'charcoal') }}
                       >
-                        <span>{b.task.content}</span>
+                        <span>{task.content}</span>
                       </div>
                     );
                   })}
