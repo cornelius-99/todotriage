@@ -1438,6 +1438,8 @@ kbd {
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  /* A second finger scrolls it by hand, so the browser mustn't take it for a pinch or pan. */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   animation: sd-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);

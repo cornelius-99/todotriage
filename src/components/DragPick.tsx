@@ -4,7 +4,7 @@ import type { Task } from '../api/types.ts';
 import { PRIORITY_COLOR, todoistColor, uiPriority } from '../lib/colors.ts';
 import { current, type Destination, destinations, labels, moveTo, setLabels, setPriority, sheet } from '../store.ts';
 import { Icon, type IconName } from './icons.tsx';
-import { finger, usePressDrag } from './press.ts';
+import { edgeSpeed, edgeZone, finger, usePressDrag, useSecondFinger } from './press.ts';
 
 // Press Move, Labels or Priority and drag up: the choices open as a list under the finger, and letting go on one
 // applies it right then. Off the list, or back down at the bar, it's cancelled. A tap still opens the full sheet.
@@ -36,8 +36,6 @@ interface Choice {
 /** A choice's id, below the list (`cancel`), or anywhere else that isn't a choice. */
 type Pointing = string | 'cancel' | 'none';
 
-/** Height of the zones at the top and bottom of a long list that scroll it. */
-const EDGE = 44;
 /** How long to stay in a scroll zone before it scrolls, so passing through doesn't. */
 const SCROLL_DELAY = 180;
 const LAND_MS = 360;
@@ -179,11 +177,13 @@ function Overlay() {
       if (!box || stage.value !== 'open') return;
       const r = box.getBoundingClientRect();
       const { y } = finger;
+      const zone = edgeZone(r.height);
 
-      if (y < r.bottom - EDGE * 1.5) armed = true;
+      if (y < r.bottom - zone * 1.5) armed = true;
       let v = 0;
-      if (y >= r.top && y < r.top + EDGE) v = -(1 + 4.5 * ((r.top + EDGE - y) / EDGE) ** 2);
-      else if (armed && y > r.bottom - EDGE && y <= r.bottom) v = 1 + 4.5 * ((y - (r.bottom - EDGE)) / EDGE) ** 2;
+      // Up past the list, over the header, scrolls at full speed.
+      if (y < r.top + zone) v = -edgeSpeed((r.top + zone - y) / zone);
+      else if (armed && y > r.bottom - zone && y <= r.bottom) v = edgeSpeed((y - (r.bottom - zone)) / zone);
       const dir = Math.sign(v) as -1 | 0 | 1;
       if (!dir) inZone = null;
       else if (inZone?.dir !== dir) inZone = { dir, since: t };
@@ -212,6 +212,10 @@ function Overlay() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const twoFinger = useSecondFinger((_, dy) => {
+    if (boxRef.current) boxRef.current.scrollTop -= dy;
+  });
+
   const choices = task ? choicesFor(k, task) : [];
   const s = stage.value;
   const shownId = s === 'open' ? aim : landed.value;
@@ -220,7 +224,7 @@ function Overlay() {
   const tone = k === 'priority' ? (shown?.color ?? PRIORITY_COLOR[task ? uiPriority(task.priority) : 4]) : KIND[k].tone;
 
   return (
-    <div class={`sd dp dp-${k} ${s}`} style={{ '--tone': tone }} role="dialog" aria-label={`Pick a ${KIND[k].noun}`}>
+    <div class={`sd dp dp-${k} ${s}`} style={{ '--tone': tone }} role="dialog" aria-label={`Pick a ${KIND[k].noun}`} {...twoFinger}>
       <div class="sd-head">
         <div class="sd-task">
           <Icon name={KIND[k].icon} size={15} />
