@@ -89,7 +89,7 @@ In the pickers, `↑`/`↓` and `↵` choose, `Esc` closes, and typing filters. 
 | Long swipe left   | Move to project…   |
 | Swipe up          | Skip               |
 
-The bottom bar has one-tap **Today / Tomorrow / Weekend / Next week** buttons, along with **Skip, Move, Schedule, Done** and **More**. More holds priority, labels, edit, delete and undo.
+The bottom bar has **Skip, Move, Schedule, Done** and **More**. Schedule opens the date sheet, which has Today, Tomorrow, Weekend and Next week at the top. More holds priority, labels, edit, delete and undo.
 
 ### Drag to schedule
 
