@@ -114,6 +114,26 @@ export function moveDueDate(due: Due | null, day: string, tz: string): string {
   return `${day}${raw.slice(10)}`;
 }
 
+/**
+ * The `date` value to send to put a task on `day` at `time` (`HH:MM` on the user's clock in `tz`).
+ * A due pinned to a fixed timezone stays pinned, so it gets the matching UTC instant.
+ */
+export function dueAtTime(due: Due | null, day: string, time: string, tz: string): string {
+  if (due?.timezone) return zonedToUtc(day, time, tz).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return `${day}T${time}:00`;
+}
+
+/** Minutes since midnight in `tz`. */
+export function minutesNow(tz: string, now = new Date()): number {
+  const [h, m] = partsIn(now, tz).time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/** `HH:MM` for minutes since midnight. */
+export function clockTime(minutes: number): string {
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
 export type DueStatus = 'overdue' | 'today' | 'future' | 'none';
 
 export function dueStatus(due: Due | null, today: string, tz: string): DueStatus {

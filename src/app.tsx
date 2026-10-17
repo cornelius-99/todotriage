@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { ActionPanel, EmptyState, Header, MobileBar, Progress, QueueList, Toasts } from './components/Chrome.tsx';
 import { Icon } from './components/icons.tsx';
+import { ScheduleOverlay } from './components/ScheduleDrag.tsx';
 import { Setup } from './components/Setup.tsx';
 import { Sheets } from './components/sheets.tsx';
 import { ExitGhost, PeekCard, TaskCard } from './components/TaskCard.tsx';
@@ -73,6 +74,7 @@ export function App() {
         </main>
       </div>
       <MobileBar />
+      <ScheduleOverlay />
       <Toasts />
       <Sheets />
     </div>

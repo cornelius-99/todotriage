@@ -38,6 +38,7 @@ import {
   type Sheet,
 } from '../store.ts';
 import { Icon, type IconName } from './icons.tsx';
+import { ScheduleButton } from './ScheduleDrag.tsx';
 
 const QUEUE_ICON: Record<QueueId, IconName> = { all: 'sparkles', overdue: 'clock', today: 'sun', inbox: 'inbox' };
 
@@ -166,7 +167,7 @@ export function ActionPanel() {
   );
 }
 
-/** Phone action bar: quick dates on top, big thumb targets below. */
+/** Phone action bar: quick dates on top, big thumb targets below, with Schedule in the middle (tap for the sheet, drag up for the calendar). */
 export function MobileBar() {
   const task = current.value;
   const off = !task;
@@ -180,7 +181,7 @@ export function MobileBar() {
   };
   const big = (icon: IconName, label: string, onClick: () => void, tone?: string) => (
     <button class={`bar-btn ${tone ?? ''}`} disabled={off && tone !== 'menu'} onClick={onClick}>
-      <Icon name={icon} size={tone === 'done' ? 26 : 22} />
+      <Icon name={icon} size={22} />
       <span>{label}</span>
     </button>
   );
@@ -195,8 +196,8 @@ export function MobileBar() {
       <div class="bar-row">
         {big('skip', 'Skip', skip)}
         {big('move', 'Move', openSheet('move'))}
+        <ScheduleButton disabled={off} />
         {big('check', 'Done', () => complete(), 'done')}
-        {big('calendar', 'Date…', openSheet('schedule'))}
         {big('more', 'More', openSheet('more'), 'menu')}
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Due } from '../api/types.ts';
-import { addDays, addMonths, datePresets, dayLabel, dueDay, dueStatus, dueTime, monthGrid, monthTitle, moveDueDate, nextWeekday, overdueBy, todayIn, weekday } from './dates.ts';
+import { addDays, addMonths, clockTime, datePresets, dayLabel, dueAtTime, dueDay, dueStatus, dueTime, minutesNow, monthGrid, monthTitle, moveDueDate, nextWeekday, overdueBy, todayIn, weekday } from './dates.ts';
 
 const due = (date: string, extra: Partial<Due> = {}): Due => ({ date, string: date, isRecurring: false, ...extra });
 
@@ -73,6 +73,23 @@ describe('due dates', () => {
     const fixed = due('2026-10-12T07:00:00Z', { timezone: 'Europe/Zurich' });
     expect(moveDueDate(fixed, '2026-10-20', 'UTC')).toBe('2026-10-20T07:00:00Z');
     expect(moveDueDate(fixed, '2026-10-27', 'UTC')).toBe('2026-10-27T08:00:00Z');
+  });
+
+  it('puts a date at a time picked on the user\'s clock', () => {
+    expect(dueAtTime(null, '2026-10-20', '15:30', 'Europe/Zurich')).toBe('2026-10-20T15:30:00');
+    expect(dueAtTime(due('2026-10-12'), '2026-10-20', '09:00', 'Europe/Zurich')).toBe('2026-10-20T09:00:00');
+    // A due pinned to a timezone stays pinned: 15:30 in Zurich is 13:30 UTC in summer time, 14:30 after Oct 25.
+    const fixed = due('2026-10-12T07:00:00Z', { timezone: 'America/New_York' });
+    expect(dueAtTime(fixed, '2026-10-20', '15:30', 'Europe/Zurich')).toBe('2026-10-20T13:30:00Z');
+    expect(dueAtTime(fixed, '2026-10-27', '15:30', 'Europe/Zurich')).toBe('2026-10-27T14:30:00Z');
+  });
+
+  it('reads and writes clock times', () => {
+    expect(clockTime(0)).toBe('00:00');
+    expect(clockTime(9 * 60 + 5)).toBe('09:05');
+    expect(clockTime(23 * 60 + 45)).toBe('23:45');
+    expect(minutesNow('Europe/Zurich', new Date('2026-10-16T22:30:00Z'))).toBe(30);
+    expect(minutesNow('America/New_York', new Date('2026-10-16T22:30:00Z'))).toBe(18 * 60 + 30);
   });
 
   it('labels days relative to today', () => {

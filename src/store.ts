@@ -4,7 +4,7 @@ import { loadAuth, revoke, saveAuth, startSignIn, finishSignIn, TokenSource, typ
 import { isAuthError, TodoistBackend } from './api/todoist.ts';
 import type { Backend, Due, Label, MoveTarget, Project, Section, SyncDueDate, Task, User } from './api/types.ts';
 import { apiPriority } from './lib/colors.ts';
-import { moveDueDate, safeTz, todayIn } from './lib/dates.ts';
+import { dayLabel, dueAtTime, moveDueDate, safeTz, todayIn } from './lib/dates.ts';
 import { buildOrder, countPending, isPending, nextAfter, prevBefore, QUEUES, reasonsFor, type QueueContext, type QueueId, type Reason } from './lib/queue.ts';
 
 // ---------------------------------------------------------------------------
@@ -79,6 +79,8 @@ export const projects = signal<Project[]>([]);
 export const sections = signal<Section[]>([]);
 export const labels = signal<Label[]>([]);
 export const tasks = signal(new Map<string, Task>());
+/** Tasks due over the coming week, queued or not. Only drawn on the drag-to-schedule calendar. */
+export const upcoming = signal<Task[]>([]);
 export const gone = signal(new Set<string>());
 export const dateAck = signal(new Set<string>());
 export const kept = signal(new Set<string>());
@@ -227,6 +229,7 @@ export function signOut(message = '') {
   batch(() => {
     resetSession();
     tasks.value = new Map();
+    upcoming.value = [];
     user.value = null;
     isDemo.value = false;
     sheet.value = null;
@@ -273,6 +276,7 @@ export async function load(initial = false): Promise<boolean> {
       rebuild();
       phase.value = 'ready';
     });
+    void loadUpcoming();
     return true;
   } catch (e) {
     if (isAuthError(e)) {
@@ -288,6 +292,17 @@ export async function load(initial = false): Promise<boolean> {
     return false;
   } finally {
     refreshing.value = false;
+  }
+}
+
+async function loadUpcoming() {
+  const b = backend;
+  if (!b) return;
+  try {
+    const found = await b.upcoming();
+    if (backend === b) upcoming.value = found;
+  } catch {
+    // The calendar just shows less.
   }
 }
 
@@ -561,6 +576,25 @@ export function scheduleDay(day: string | null, label?: string, id = currentId.v
     stat: 'scheduled',
     dir: 'left',
     stamp: day === null ? { kind: 'unscheduled', text: 'No date' } : { kind: 'scheduled', text: label ?? 'Scheduled' },
+    call: (b) => b.setDue(id, newDue),
+    revert: (b) => b.setDue(id, dueForSync(t.due)),
+  });
+}
+
+/** A day at a time of day (`HH:MM` on the user's clock). Recurring tasks keep their recurrence. */
+export function scheduleAt(day: string, time: string, id = currentId.value) {
+  const t = id ? tasks.value.get(id) : null;
+  if (!t || !id) return;
+  const date = dueAtTime(t.due, day, time, tz.value);
+  const newDue: SyncDueDate = t.due?.isRecurring ? { ...dueForSync(t.due), date } : { date, ...(t.due?.timezone ? { timezone: t.due.timezone } : {}) };
+  const when = `${dayLabel(day, today.value)} ${time}`;
+  void perform(id, {
+    label: `Scheduled “${short(t)}” for ${when}`,
+    apply: (x) => ({ ...x, due: { string: when, isRecurring: false, ...t.due, ...newDue, datetime: null } as Due }),
+    ack: true,
+    stat: 'scheduled',
+    dir: 'left',
+    stamp: { kind: 'scheduled', text: when },
     call: (b) => b.setDue(id, newDue),
     revert: (b) => b.setDue(id, dueForSync(t.due)),
   });

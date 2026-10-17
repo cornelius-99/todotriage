@@ -330,6 +330,7 @@ function HelpSheet() {
             <div><dt><span class="swatch schedule" />Swipe left</dt><dd>Schedule…</dd></div>
             <div><dt><span class="swatch move" />Long swipe left</dt><dd>Move to project…</dd></div>
             <div><dt><span class="swatch skip" />Swipe up</dt><dd>Skip</dd></div>
+            <div><dt><span class="swatch schedule" />Drag up from Schedule</dt><dd>Drop on a time</dd></div>
           </dl>
         </section>
         {groups.map((g) => (

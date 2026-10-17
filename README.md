@@ -89,7 +89,19 @@ In the pickers, `↑`/`↓` and `↵` choose, `Esc` closes, and typing filters. 
 | Long swipe left   | Move to project…   |
 | Swipe up          | Skip               |
 
-The bottom bar has one-tap **Today / Tomorrow / Weekend / Next week** buttons, along with **Skip, Move, Done, Date…** and **More**. More holds priority, labels, edit, delete and undo.
+The bottom bar has one-tap **Today / Tomorrow / Weekend / Next week** buttons, along with **Skip, Move, Schedule, Done** and **More**. More holds priority, labels, edit, delete and undo.
+
+### Drag to schedule
+
+The big **Schedule** button in the middle does two things. Tap it for the date sheet. Or press it and drag up: a few days of calendar open under your thumb, with what's already planned on them, and letting go schedules the task right there, in one gesture.
+
+- **Up and down** picks the time, in 15-minute steps. The slot sits just above your thumb so you can see it, and the time is shown large at the top.
+- **Left and right** picks the day. Hold at the right edge to page to later days, at the left edge to come back.
+- **Hold near the top or bottom** of the grid to scroll to earlier or later hours. It opens on 08:00.
+- **Let go on a day's header** to give the task that day without a time.
+- **Drag back down to the button** to cancel. Times that have already passed today can't be picked.
+
+The task keeps its recurrence, and its fixed timezone if it has one. Durations aren't set: the calendar draws the task as 30 minutes, and Todoist keeps its own default.
 
 ## Safety nets
 
@@ -117,10 +129,11 @@ npm run icons   # redraw the app icon: icon.svg plus every PNG size
 Code map:
 
 - `src/auth.ts`: OAuth sign-in (PKCE), token storage and refresh
-- `src/api/todoist.ts`: the SDK wrapper (loading, close/reopen/delete/update/move, Sync-based rescheduling, refresh-and-retry on 401)
+- `src/api/todoist.ts`: the SDK wrapper (loading, the next week's tasks for the calendar, close/reopen/delete/update/move, Sync-based rescheduling, refresh-and-retry on 401)
 - `src/api/demo.ts`: the in-memory backend behind demo mode
 - `src/store.ts`: app state (signals), optimistic actions, undo, delayed deletes
 - `src/lib/queue.ts`: which tasks need triage and in what order
 - `src/lib/dates.ts`: time zone-aware date math and presets
 - `src/shortcuts.ts`: the keyboard map, which drives both the handler and the help sheet
 - `src/components/TaskCard.tsx`: the card and its swipe gestures
+- `src/components/ScheduleDrag.tsx`: the Schedule button and the drag-to-schedule calendar
