@@ -7,7 +7,7 @@ const task = (id: string, extra: Partial<Task> = {}): Task =>
 const due = (date: string) => ({ date, string: date, isRecurring: false });
 
 function ctx(tasks: Task[], extra: Partial<QueueContext> = {}): QueueContext {
-  return { today: '2026-10-16', tz: 'UTC', inboxId: 'inbox', tasks: new Map(tasks.map((t) => [t.id, t])), gone: new Set(), dateAck: new Set(), dated: new Set(), leftInbox: new Set(), ...extra };
+  return { today: '2026-10-16', tz: 'UTC', now: Date.parse('2026-10-16T09:00:00Z'), inboxId: 'inbox', tasks: new Map(tasks.map((t) => [t.id, t])), gone: new Set(), dateAck: new Set(), dated: new Set(), leftInbox: new Set(), ...extra };
 }
 
 describe('queue membership', () => {
@@ -60,6 +60,24 @@ describe('queue membership', () => {
   it('lets a task already in a project finish with a date alone', () => {
     const c = ctx(tasks, { dateAck: new Set(['old']), dated: new Set(['old']) });
     expect(isPending('old', 'all', c)).toBe(false);
+  });
+
+  it('skips project tasks due later today until their time comes', () => {
+    const timed = [
+      task('past', { due: due('2026-10-16T08:00:00') }),
+      task('soon', { due: due('2026-10-16T10:00:00') }),
+      task('soonUtc', { due: due('2026-10-16T10:00:00Z') }),
+      task('allDay', { due: due('2026-10-16') }),
+      task('inSoon', { projectId: 'inbox', due: due('2026-10-16T10:00:00') }),
+    ];
+    const c = ctx(timed);
+    expect(buildOrder('all', c)).toEqual(['past', 'inSoon', 'allDay']);
+    expect(reasonsFor(timed[4], 'all', c)).toEqual(['today', 'inbox']);
+    // Moved out of the Inbox but not dated this session: still shows.
+    const moved = task('inSoon', { projectId: 'work', due: due('2026-10-16T10:00:00') });
+    expect(isPending('inSoon', 'all', ctx([moved], { leftInbox: new Set(['inSoon']) }))).toBe(true);
+    // Its time has come by the next load.
+    expect(isPending('soon', 'today', ctx(timed, { now: Date.parse('2026-10-16T10:00:00Z') }))).toBe(true);
   });
 
   it('drops tasks that are gone', () => {

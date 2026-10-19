@@ -98,7 +98,7 @@ export const refreshing = signal(false);
 export const exiting = signal<Exit | null>(null);
 
 const clock = signal(Date.now());
-let lastLoadAt = 0;
+const loadedAt = signal(0);
 
 export const tz = computed(() => safeTz(user.value?.tzInfo?.timezone));
 export const today = computed(() => {
@@ -110,6 +110,7 @@ export const inboxId = computed(() => user.value?.inboxProjectId ?? projects.val
 export const ctx = computed<QueueContext>(() => ({
   today: today.value,
   tz: tz.value,
+  now: loadedAt.value,
   inboxId: inboxId.value,
   tasks: tasks.value,
   gone: gone.value,
@@ -311,7 +312,6 @@ export async function load(initial = false): Promise<boolean> {
   flushDeletes();
   try {
     const snap = await backend.load();
-    lastLoadAt = Date.now();
     clock.value = Date.now();
     const map = new Map<string, Task>();
     for (const t of [...snap.overdue, ...snap.today, ...snap.inbox]) map.set(t.id, t);
@@ -324,6 +324,7 @@ export async function load(initial = false): Promise<boolean> {
       sections.value = snap.sections.filter((s) => !s.isArchived).sort((a, b) => a.sectionOrder - b.sectionOrder);
       labels.value = [...snap.labels].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       tasks.value = map;
+      loadedAt.value = clock.value;
       rebuild();
       phase.value = 'ready';
     });
@@ -388,7 +389,7 @@ if (typeof document !== 'undefined') {
     }
     const dayBefore = today.value;
     clock.value = Date.now();
-    if (phase.value === 'ready' && (Date.now() - lastLoadAt > 10 * 60_000 || today.value !== dayBefore)) void load();
+    if (phase.value === 'ready' && (Date.now() - loadedAt.value > 10 * 60_000 || today.value !== dayBefore)) void load();
   });
   window.addEventListener('pagehide', flushDeletes);
   setInterval(() => (clock.value = Date.now()), 60_000);

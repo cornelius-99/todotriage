@@ -81,6 +81,14 @@ export function dueTime(due: Due, tz: string): string | null {
   return raw.slice(11, 16);
 }
 
+/** The instant a timed due date falls at, or null if it has no time of day. */
+export function dueInstant(due: Due, tz: string): Date | null {
+  const raw = due.datetime ?? due.date;
+  if (!raw.includes('T')) return null;
+  if (/Z$|[+-]\d\d:\d\d$/.test(raw)) return new Date(raw);
+  return zonedToUtc(raw.slice(0, 10), raw.slice(11, 19), tz);
+}
+
 /** Convert a wall-clock time in `tz` to a UTC instant. */
 export function zonedToUtc(day: string, time: string, tz: string): Date {
   const [y, mo, d] = day.split('-').map(Number);

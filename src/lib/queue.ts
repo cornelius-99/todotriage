@@ -1,5 +1,5 @@
 import type { Task } from '../api/types.ts';
-import { dueDay, dueStatus, dueTime } from './dates.ts';
+import { dueDay, dueInstant, dueStatus, dueTime } from './dates.ts';
 
 export type Reason = 'overdue' | 'today' | 'inbox';
 export type QueueId = 'all' | Reason;
@@ -14,6 +14,8 @@ export const QUEUES: { id: QueueId; label: string }[] = [
 export interface QueueContext {
   today: string;
   tz: string;
+  /** When the tasks were loaded (ms). Today's tasks timed after this wait until they're due. */
+  now: number;
   inboxId: string;
   tasks: Map<string, Task>;
   /** Tasks completed or deleted this session. */
@@ -32,18 +34,24 @@ const includes = (queue: QueueId, r: Reason) => queue === 'all' || queue === r;
  * Why a task still needs triage in `queue`. A task leaves the queue once this is empty:
  * date reasons are settled by any explicit date decision, the inbox reason only once the task
  * has both been moved out of the Inbox and been given a date, in either order.
+ * A task in a project that's due later today is already planned, so it only shows once its time has come.
  */
 export function reasonsFor(task: Task, queue: QueueId, ctx: QueueContext): Reason[] {
   if (ctx.gone.has(task.id)) return [];
   const out: Reason[] = [];
+  const inInbox = task.projectId === ctx.inboxId || (ctx.leftInbox.has(task.id) && !ctx.dated.has(task.id));
   if (!ctx.dateAck.has(task.id)) {
     const s = dueStatus(task.due, ctx.today, ctx.tz);
     if (s === 'overdue' && includes(queue, 'overdue')) out.push('overdue');
-    if (s === 'today' && includes(queue, 'today')) out.push('today');
+    if (s === 'today' && includes(queue, 'today') && (inInbox || !laterToday(task, ctx))) out.push('today');
   }
-  const inInbox = task.projectId === ctx.inboxId || (ctx.leftInbox.has(task.id) && !ctx.dated.has(task.id));
   if (inInbox && includes(queue, 'inbox')) out.push('inbox');
   return out;
+}
+
+function laterToday(task: Task, ctx: QueueContext): boolean {
+  const at = task.due && dueInstant(task.due, ctx.tz);
+  return !!at && at.getTime() > ctx.now;
 }
 
 export function isPending(id: string, queue: QueueId, ctx: QueueContext, depth = 0): boolean {
