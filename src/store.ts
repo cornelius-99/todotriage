@@ -614,23 +614,23 @@ export function complete(id = currentId.value) {
   });
 }
 
+/**
+ * A day without a time of day: the task becomes all-day and drops any time it had. Recurring
+ * tasks keep their time, since it belongs to the repeat rule and comes back on the next one.
+ */
 export function scheduleDay(day: string | null, label?: string, id = currentId.value) {
   const t = id ? tasks.value.get(id) : null;
   if (!t || !id) return;
+  const recurring = !!t.due?.isRecurring;
   const newDue: SyncDueDate =
-    day === null
-      ? null
-      : t.due?.isRecurring
-        ? { ...dueForSync(t.due), date: moveDueDate(t.due, day, tz.value) }
-        : {
-            date: moveDueDate(t.due, day, tz.value),
-            ...(t.due?.timezone && t.due.date.includes('T') ? { timezone: t.due.timezone } : {}),
-          };
+    day === null ? null : recurring ? { ...dueForSync(t.due), date: moveDueDate(t.due, day, tz.value) } : { date: day };
   void perform(id, {
     label: day === null ? `Removed date from “${short(t)}”` : `Scheduled “${short(t)}” for ${label ?? day}`,
     apply: (x) => ({
       ...x,
-      due: newDue ? ({ string: label ?? day ?? '', isRecurring: false, ...t.due, ...newDue, datetime: null } as Due) : null,
+      due: newDue
+        ? ({ string: label ?? day ?? '', isRecurring: false, ...t.due, ...newDue, datetime: null, ...(recurring ? {} : { timezone: null }) } as Due)
+        : null,
     }),
     ack: true,
     dated: day !== null,
