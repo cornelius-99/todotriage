@@ -7,7 +7,9 @@ import { today, tz } from './store.ts';
 // Read-only Google Calendar, so the schedule view can draw your events. Google's own browser
 // libraries do the work: Identity Services signs in (a popup) and hands out an access token, and
 // the API client (gapi) makes the Calendar calls. Browser tokens last an hour with no refresh
-// token, so after that the settings offer Reconnect, which is one tap with no questions.
+// token, and Google only hands out a new one through its popup, which browsers allow only from a
+// tap. So once it's run out, the first tap anywhere quietly asks for a new one; if Google wants
+// the user to sign in again, the settings offer Reconnect.
 
 export const GOOGLE_CLIENT_ID: string = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '510994130241-bvrkbrsu4mngbb2f82jp98ro7q7lt16v.apps.googleusercontent.com';
 
@@ -19,6 +21,10 @@ const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
 const AUTH_KEY = 'todotriage.google';
 const SHOWN_KEY = 'todotriage.google.shown';
+/** Renew on a tap when the token has less than this left, so it doesn't run out mid-use. */
+const RENEW_AHEAD = 5 * 60_000;
+/** Away from the app this long, coming back counts as opening it again. */
+const AWAY = 60_000;
 /** Reload events when the calendar opens and they're older than this. */
 const STALE = 3 * 60_000;
 /** Days fetched around today. */
@@ -99,6 +105,15 @@ function script(src: string, what: string): Promise<void> {
 
 let tokenClient: google.accounts.oauth2.TokenClient | null = null;
 let libs: Promise<void> | null = null;
+/** The token request under way: a quiet renewal on a tap, or a sign-in from the settings. */
+let request: 'renew' | 'sign-in' | null = null;
+/** A quiet renewal failed since the app was last opened, so taps leave Google alone until the next time. */
+let renewFailed = false;
+
+function renewalFailed() {
+  request = null;
+  renewFailed = true;
+}
 
 // Set up the way Google's Calendar JavaScript quickstart does: api.js → gapi.load('client') →
 // gapi.client.init with the discovery doc, and Identity Services' token client for sign-in.
@@ -115,8 +130,12 @@ async function initGis() {
     client_id: GOOGLE_CLIENT_ID,
     scope: SCOPE,
     callback: (res) => {
+      const renewing = request === 'renew';
+      request = null;
       if (res.error !== undefined) {
-        calendarError.value = `Google sign-in failed: ${res.error_description || res.error}`;
+        // A quiet renewal fails when Google wants to show a screen; Reconnect in the settings covers that.
+        if (renewing) renewalFailed();
+        else calendarError.value = `Google sign-in failed: ${res.error_description || res.error}`;
         return;
       }
       calendarError.value = '';
@@ -124,6 +143,8 @@ async function initGis() {
       void loadCalendar(true);
     },
     error_callback: (err) => {
+      if (request === 'renew') return renewalFailed();
+      request = null;
       if (err.type !== 'popup_closed') calendarError.value = `Google sign-in failed: ${err.message || err.type}`;
     },
   });
@@ -131,10 +152,11 @@ async function initGis() {
 
 /** Load both libraries once. The sign-in popup must open within the tap, so this runs before it. */
 export function loadGoogle(): Promise<void> {
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Couldn't load Google's libraries. A content blocker may be stopping them.")), LOAD_TIMEOUT),
-  );
-  libs ??= Promise.race([Promise.all([initGapi(), initGis()]), timeout])
+  const timeout = () =>
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Couldn't load Google's libraries. A content blocker may be stopping them.")), LOAD_TIMEOUT),
+    );
+  libs ??= Promise.race([Promise.all([initGapi(), initGis()]), timeout()])
     .then(() => {
       googleReady.value = true;
       setAuth(auth.value);
@@ -150,14 +172,35 @@ export function loadGoogle(): Promise<void> {
 export function connectGoogle() {
   if (!tokenClient) return;
   const email = auth.value?.email;
+  request = 'sign-in';
   // As in the quickstart: ask for consent on a first sign-in, skip the account chooser and consent after that.
   tokenClient.requestAccessToken(auth.value ? { prompt: '', login_hint: email } : { prompt: 'consent' });
+}
+
+/** Connected before, and the token has run out or is about to. */
+function wantsRenewal() {
+  const a = auth.value;
+  return !!a && (!a.accessToken || (a.expiresAt ?? 0) - Date.now() < RENEW_AHEAD);
+}
+
+/**
+ * Any tap in the app: if the token has run out, ask Google for a new one right in the tap, since a
+ * popup opened any other time gets blocked. `prompt: 'none'` keeps Google from showing a screen, so
+ * the popup closes by itself; if Google needs the user, it fails and the settings offer Reconnect.
+ * Taps on the Connect and Reconnect buttons are left to them.
+ */
+function renewOnTap(e: MouseEvent) {
+  if (!tokenClient || request || renewFailed || !wantsRenewal()) return;
+  if (e.target instanceof Element && e.target.closest('[data-google-sign-in]')) return;
+  request = 'renew';
+  tokenClient.requestAccessToken({ prompt: 'none', login_hint: auth.value?.email });
 }
 
 export function disconnectGoogle() {
   const token = auth.value?.accessToken;
   if (token && googleReady.value) google.accounts.oauth2.revoke(token, () => {});
   setAuth(null);
+  renewFailed = false;
   calendars.value = [];
   events.value = [];
   calendarError.value = '';
@@ -176,6 +219,14 @@ export function setShown(c: GCalendar, on: boolean) {
 
 /** At startup: if Google was connected, get the libraries ready and fetch events while the token lasts. */
 export function bootGoogle() {
+  document.addEventListener('click', renewOnTap, true);
+  // Coming back to the app after a while counts as opening it again, so a failed renewal gets
+  // another try. A short absence doesn't: on a phone, Google's popup itself hides the app.
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+    else if (Date.now() - hiddenAt > AWAY) renewFailed = false;
+  });
   if (!auth.value) return;
   void loadGoogle().then(() => loadCalendar(true));
 }

@@ -292,7 +292,7 @@ function SettingsSheet() {
           <>
             <p class="muted">Show your events in the schedule view while you drag a task onto a time. Read-only: the app can't change your calendar.</p>
             {canUseGoogle ? (
-              <button class="btn primary" onClick={googleReady.value ? connectGoogle : () => ((calendarError.value = ''), void loadGoogle())} disabled={!googleReady.value && !calendarError.value}>
+              <button class="btn primary" data-google-sign-in onClick={googleReady.value ? connectGoogle : () => ((calendarError.value = ''), void loadGoogle())} disabled={!googleReady.value && !calendarError.value}>
                 <Icon name="calendar" size={16} /> {googleReady.value || calendarError.value ? 'Connect Google Calendar' : 'Loading Google…'}
               </button>
             ) : (
@@ -304,7 +304,7 @@ function SettingsSheet() {
           <>
             <p class="muted">The Google sign-in has run out. Reconnect to see your events again.</p>
             <div class="settings-actions">
-              <button class="btn primary" onClick={googleReady.value ? connectGoogle : () => ((calendarError.value = ''), void loadGoogle())} disabled={!googleReady.value && !calendarError.value}>
+              <button class="btn primary" data-google-sign-in onClick={googleReady.value ? connectGoogle : () => ((calendarError.value = ''), void loadGoogle())} disabled={!googleReady.value && !calendarError.value}>
                 <Icon name="refresh" size={16} /> {googleReady.value || calendarError.value ? 'Reconnect' : 'Loading Google…'}
               </button>
               <button class="btn" onClick={disconnectGoogle}>
